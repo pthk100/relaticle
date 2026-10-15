@@ -23,11 +23,18 @@ FROM node:26-alpine AS frontend
 
 WORKDIR /app
 
+# The DEV050 build host blackholes registry.npmjs.org (curl to it returns 000 /
+# times out, while registry.npmmirror.com answers in ~0.1s), so an unqualified
+# install hangs until npm gives up. Overridable, so a host with normal egress can
+# point at the canonical registry:
+#   docker build --build-arg NPM_REGISTRY=https://registry.npmjs.org .
+ARG NPM_REGISTRY=https://registry.npmmirror.com
+
 # Corepack is gone from Node 25+, and letting pnpm fetch its own pinned version
 # needs glibc, so install the exact version package.json already pins.
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
-RUN npm install -g "$(node -p 'require("./package.json").packageManager')" \
-    && pnpm install --frozen-lockfile --ignore-scripts
+RUN npm install -g --registry=$NPM_REGISTRY "$(node -p 'require("./package.json").packageManager')" \
+    && pnpm install --frozen-lockfile --ignore-scripts --registry=$NPM_REGISTRY
 
 # Copy source files needed for build
 COPY vite.config.js ./

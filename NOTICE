@@ -28,7 +28,7 @@ Files added:
   app/Http/Middleware/EnsurePlatformKey.php
   app/Actions/Platform/ProvisionWorkspace.php
   app/Http/Controllers/Api/V1/WorkspaceProvisionController.php
-  app/Console/Commands/EnsurePlatformServiceUser.php
+  app/Console/Commands/EnsurePlatformServiceUserCommand.php
   NOTICE  (this file)
 
 Files modified:
@@ -36,6 +36,9 @@ Files modified:
                         workspace-scoped middleware group
   config/relaticle.php  adds a `platform` section: the X-Platform-Key shared
                         secret and the service-user identity
+  Dockerfile            threads an overridable NPM_REGISTRY build ARG through
+                        the frontend stage (the build host blackholes
+                        registry.npmjs.org); no runtime behaviour changes
 
 NO UPSTREAM LOGIC WAS ALTERED. The new endpoint calls upstream's own
 App\Actions\Jetstream\CreateWorkspace — the same action the Filament page
