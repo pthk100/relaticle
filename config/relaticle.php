@@ -24,6 +24,24 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Platform provisioning  (fork addition — see NOTICE)
+    |--------------------------------------------------------------------------
+    |
+    | The shared secret the calling platform presents as `X-Platform-Key` on
+    | POST /api/v1/workspaces, and the identity that owns every workspace created
+    | through it. The service user is seeded by `php artisan platform:service-user`.
+    |
+    | UPSTREAM RELATICLE HAS NO EQUIVALENT: workspace creation is UI-only, which is
+    | why this fork exists. See NOTICE for the modification record.
+    */
+    'platform' => [
+        'api_key' => env('PLATFORM_API_KEY'),
+        'service_user_email' => env('PLATFORM_SERVICE_USER_EMAIL', 'platform@relaticle.invalid'),
+        'service_user_name' => env('PLATFORM_SERVICE_USER_NAME', 'Platform Provisioning'),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Workspaces
     |--------------------------------------------------------------------------
     |
