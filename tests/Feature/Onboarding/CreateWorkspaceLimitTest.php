@@ -19,6 +19,25 @@ it('allows a fourth workspace under the default cap', function (): void {
     $this->get(route('filament.app.tenant.registration'))->assertSuccessful();
 });
 
+it('exempts the platform service user from the owned-workspace cap', function (): void {
+    // The service user owns one workspace per tenant, so the human anti-abuse cap
+    // must never apply to it — otherwise the whole platform is silently capped at
+    // max_owned_per_user tenants and the FATAL relaticle provisioning step 403s
+    // from tenant #(cap+1) on. See WorkspacePolicy::create.
+    config()->set('relaticle.workspaces.max_owned_per_user', 2);
+    config()->set('relaticle.platform.service_user_email', 'platform@relaticle.invalid');
+
+    $serviceUser = User::factory()->create(['email' => 'platform@relaticle.invalid']);
+
+    Workspace::factory()->count(5)->create(['user_id' => $serviceUser->id]);
+
+    $this->actingAs($serviceUser);
+
+    expect($serviceUser->refresh()->ownedWorkspaces()->count())->toBe(5);
+
+    $this->get(route('filament.app.tenant.registration'))->assertSuccessful();
+});
+
 it('explains the workspace limit instead of returning a bare 404', function (): void {
     // A low cap keeps the fixture small; the point is the behavior at the cap,
     // whatever the configured number happens to be.

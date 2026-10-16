@@ -67,3 +67,29 @@ App\Actions\Jetstream\DeleteWorkspace (the DeletesTeams contract), so deletion
 keeps a single code path — billing cancel, `purge()` cascade and media cleanup
 all remain upstream's business. The route is idempotent: an unknown slug returns
 `{"deleted": false}` rather than throwing.
+
+THE MODIFICATION (2026-10-16) — exempt the platform service user from the cap
+--------------------------------------------------------------------------------
+Changed: App\Policies\WorkspacePolicy::create() now returns true for the
+platform service user (config `relaticle.platform.service_user_email`) before
+applying the per-user owned-workspace cap.
+
+Reason: App\Actions\Platform\ProvisionWorkspace creates EVERY platform-provisioned
+workspace owned by that one service user, and it delegates to upstream's own
+CreateWorkspace, which authorises `create` through this policy. The upstream cap
+(`relaticle.workspaces.max_owned_per_user`, default 10) is an anti-abuse limit for
+HUMAN owners; applied to the single non-human provisioning identity it silently
+capped the whole platform at 10 tenants, so the orchestrator's FATAL relaticle
+provisioning step 403'd ("This action is unauthorized.") from tenant #11 on.
+
+Files modified:
+  app/Policies/WorkspacePolicy.php  `create()` exempts the service user; a private
+                                    `isPlatformServiceUser()` matches the email
+                                    against the `platform.service_user_email`
+                                    config value. The cap still applies to every
+                                    other user unchanged.
+
+THIS IS THE FIRST FORK COMMIT THAT ALTERS AN UPSTREAM CODE PATH (the earlier
+additions were new files only). The change is deliberately minimal and localised
+to one method so it stays cheap to rebase; `main` is unaffected.
+

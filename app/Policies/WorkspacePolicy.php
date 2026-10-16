@@ -31,10 +31,33 @@ final readonly class WorkspacePolicy
 
     /**
      * Determine whether the user can create models.
+     *
+     * The platform service user — the single identity that owns every workspace
+     * created through POST /api/v1/workspaces (see
+     * App\Actions\Platform\ProvisionWorkspace) — is EXEMPT from the per-user cap.
+     * That cap is an anti-abuse limit for human owners; this one non-human
+     * identity owns a workspace per tenant, so applying it here would silently
+     * cap the whole platform at max_owned_per_user tenants. Fork addition — see
+     * NOTICE.
      */
     public function create(User $user): bool
     {
+        if ($this->isPlatformServiceUser($user)) {
+            return true;
+        }
+
         return $user->ownedWorkspaces()->count() < (int) config('relaticle.workspaces.max_owned_per_user');
+    }
+
+    /**
+     * Whether this user is the platform's provisioning identity, which owns
+     * workspaces on behalf of tenants rather than on its own behalf.
+     */
+    private function isPlatformServiceUser(User $user): bool
+    {
+        $email = config('relaticle.platform.service_user_email');
+
+        return is_string($email) && $email !== '' && $user->email === $email;
     }
 
     /**
