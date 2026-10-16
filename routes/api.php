@@ -10,6 +10,7 @@ use App\Http\Controllers\Api\V1\OpportunitiesController;
 use App\Http\Controllers\Api\V1\PeopleController;
 use App\Http\Controllers\Api\V1\PeopleUpsertController;
 use App\Http\Controllers\Api\V1\TasksController;
+use App\Http\Controllers\Api\V1\WorkspaceDeprovisionController;
 use App\Http\Controllers\Api\V1\WorkspaceProvisionController;
 use App\Http\Middleware\EnsureHostedWorkspaceAccess;
 use App\Http\Middleware\EnsurePlatformKey;
@@ -39,6 +40,10 @@ Route::prefix('v1')
     ->middleware([ForceJsonResponse::class, EnsurePlatformKey::class, 'throttle:api'])
     ->group(function (): void {
         Route::post('workspaces', WorkspaceProvisionController::class)->name('platform.workspaces.store');
+        // Teardown counterpart — the orchestrator's cancel path deletes the tenant
+        // by slug over the same platform-guarded group (a workspace-pinned token
+        // cannot exist for a workspace being removed).
+        Route::delete('workspaces/{slug}', WorkspaceDeprovisionController::class)->name('platform.workspaces.destroy');
     });
 
 Route::prefix('v1')

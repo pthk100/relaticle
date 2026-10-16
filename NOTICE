@@ -47,3 +47,23 @@ a thin addition that is cheap to rebase onto upstream.
 
 The modification is confined to the `platform` branch. `main` tracks upstream so
 that `git merge upstream/main` remains usable.
+
+THE MODIFICATION (2026-10-16) — workspace teardown
+--------------------------------------------------
+Added: the delete counterpart to the provisioning endpoint, so the orchestrator's
+cancel path can remove a tenant without a control channel into the container.
+
+Files added:
+  app/Actions/Platform/DeprovisionWorkspace.php
+  app/Http/Controllers/Api/V1/WorkspaceDeprovisionController.php
+
+Files modified:
+  routes/api.php        registers DELETE /api/v1/workspaces/{slug}, in the same
+                        platform-guarded group as the create route (a token
+                        pinned to a workspace cannot exist for one being removed)
+
+NO UPSTREAM LOGIC WAS ALTERED. DeprovisionWorkspace calls upstream's own
+App\Actions\Jetstream\DeleteWorkspace (the DeletesTeams contract), so deletion
+keeps a single code path — billing cancel, `purge()` cascade and media cleanup
+all remain upstream's business. The route is idempotent: an unknown slug returns
+`{"deleted": false}` rather than throwing.
