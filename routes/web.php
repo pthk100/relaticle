@@ -79,7 +79,10 @@ Route::get('/auth/broker/{token}', BrokerLoginController::class)
 Route::get('/auth/keycloak/callback', [KeycloakFederationController::class, 'callback'])
     ->name('platform.keycloak.callback')
     ->middleware('throttle:30,1');
-Route::get('/auth/keycloak/{workspace}', [KeycloakFederationController::class, 'start'])
+// `{workspace:slug}` binds on the SLUG, not the model's default route key
+// (`id`) — the slug IS the realm suffix, so "bind by id" would 404 every
+// hand-off. The slug shape is Laravel's own workspace-slug rule.
+Route::get('/auth/keycloak/{workspace:slug}', [KeycloakFederationController::class, 'start'])
     ->where('workspace', '[a-z0-9]+(?:-[a-z0-9]+)*')
     ->name('platform.keycloak.start')
     ->middleware('throttle:30,1');
