@@ -45,6 +45,15 @@ final readonly class EnsureWorkspaceOwner
             $workspace->users()->attach($owner->getKey(), ['role' => 'admin']);
         }
 
+        // A workspace adopted for a PLATFORM tenant skips the panel's own
+        // first-run onboarding wizard: the brand has already described itself at
+        // signup, and re-entering that in the CRM is the "register again" friction
+        // this seam exists to remove (t_5df176cd). `null` is upstream's
+        // "onboarding complete" marker (App\Filament\Pages\SetupWorkspace).
+        if ($workspace->onboarding_step !== null) {
+            $workspace->forceFill(['onboarding_step' => null])->save();
+        }
+
         return $owner;
     }
 }

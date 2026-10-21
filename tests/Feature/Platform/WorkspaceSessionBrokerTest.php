@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use App\Enums\WorkspaceSetupStep;
 use App\Models\User;
 use App\Models\Workspace;
 use Illuminate\Support\Facades\Cache;
@@ -50,6 +51,23 @@ it('adopts the tenant owner on a workspace still owned by the platform service u
     expect($owner)->not->toBeNull()
         ->and($workspace->fresh()->user_id)->toBe($owner->getKey())
         ->and($workspace->fresh()->hasUser($owner))->toBeTrue();
+});
+
+it('skips the panel first-run onboarding for a platform tenant', function (): void {
+    $serviceUser = User::factory()->create(['email' => 'platform@relaticle.invalid']);
+    $workspace = Workspace::factory()->create([
+        'slug' => 'solstice',
+        'user_id' => $serviceUser->id,
+        'onboarding_step' => WorkspaceSetupStep::UseCase,
+    ]);
+
+    $this->withHeader('X-Platform-Key', 'test-platform-key')
+        ->postJson('/api/v1/workspaces/solstice/session', ['owner_email' => 'admin@solstice.tenant.test'])
+        ->assertOk();
+
+    // `null` is upstream's "onboarding complete" marker; a brand that already
+    // described itself at signup must not be dropped into the CRM's wizard.
+    expect($workspace->fresh()->onboarding_step)->toBeNull();
 });
 
 it('is idempotent — a second mint adopts the same owner', function (): void {

@@ -59,6 +59,15 @@ final readonly class ProvisionWorkspace
             ])
         );
 
+        // Upstream's panel drops a brand-new workspace into its own first-run
+        // onboarding wizard (App\Filament\Pages\SetupWorkspace) while
+        // `onboarding_step` is non-null. A PLATFORM-provisioned tenant has
+        // already told us who it is — name, domain, plan — at signup, so making
+        // the brand re-enter that in the CRM is the same "register again" friction
+        // the console broker exists to remove (t_5df176cd). `null` is upstream's
+        // own "onboarding complete" marker.
+        $workspace->forceFill(['onboarding_step' => null])->save();
+
         return [
             'workspace' => $workspace,
             'owner' => $user,

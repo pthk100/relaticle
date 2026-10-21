@@ -133,3 +133,21 @@ Files modified:
 NO UPSTREAM LOGIC WAS ALTERED. Workspace creation still runs through upstream's
 own App\Actions\Jetstream\CreateWorkspace; the broker only chooses the owning
 identity and hands back a one-time URL.
+
+THE MODIFICATION (2026-10-21, part 2) — skip the panel first-run onboarding
+----------------------------------------------------------------------------
+Changed: App\Actions\Platform\ProvisionWorkspace (and EnsureWorkspaceOwner) set
+the workspace's `onboarding_step` to null — upstream's own "onboarding complete"
+marker (App\Filament\Pages\SetupWorkspace) — for a PLATFORM-provisioned tenant.
+
+Reason: upstream's panel drops a brand-new workspace into its first-run
+onboarding wizard. A platform tenant has already described itself at signup
+(name, domain, plan), so making the brand re-enter that in the CRM is the same
+"register again" friction the session broker exists to remove (t_5df176cd).
+
+Files modified:
+  app/Actions/Platform/ProvisionWorkspace.php    clears onboarding_step after create
+  app/Actions/Platform/EnsureWorkspaceOwner.php  clears it when adopting a workspace
+
+NO UPSTREAM LOGIC WAS ALTERED. The wizard itself is untouched and still runs for
+workspaces created through upstream's own registration UI.
