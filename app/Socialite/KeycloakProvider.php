@@ -82,23 +82,33 @@ final class KeycloakProvider extends AbstractProvider implements ProviderInterfa
     }
 
     /**
+     * The identity claims, read from the ACCESS token itself.
+     *
+     * Keycloak's access token is a JWT whose `profile`/`email` client-scope
+     * mappers carry `sub`, `preferred_username`, `email` and `name` — the same
+     * claims the userinfo endpoint would return — so there is no reason to make
+     * a second network call. (The userinfo endpoint additionally answers 401 to
+     * a token minted through the internal base URL, because the token's issuer
+     * is the PUBLIC origin and Keycloak won't accept it through the internal
+     * one; reading the signed token sidesteps that entirely.)
+     *
      * @return array<string, mixed>
      */
     protected function getUserByToken($token): array
     {
-        $response = $this->getHttpClient()->get(
-            "{$this->internalBaseUrl}/realms/{$this->realm}/protocol/openid-connect/userinfo",
-            [
-                'headers' => [
-                    'Accept' => 'application/json',
-                    'Authorization' => 'Bearer '.$token,
-                ],
-            ],
-        );
+        $parts = explode('.', (string) $token);
+        if (count($parts) < 2) {
+            return [];
+        }
 
-        $decoded = json_decode((string) $response->getBody(), true);
+        $payload = base64_decode(strtr($parts[1], '-_', '+/'), true);
+        if ($payload === false) {
+            return [];
+        }
 
-        return is_array($decoded) ? $decoded : [];
+        $claims = json_decode($payload, true);
+
+        return is_array($claims) ? $claims : [];
     }
 
     /**
