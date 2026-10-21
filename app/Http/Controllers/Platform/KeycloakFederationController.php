@@ -189,7 +189,13 @@ final class KeycloakFederationController
     private function provider(Request $request, string $slug): KeycloakProvider
     {
         $internal = (string) config('services.keycloak.internal_base_url', 'http://keycloak:8080');
-        $publicOrigin = (string) config('services.keycloak.public_origin', $this->publicOrigin());
+
+        // `config('services.keycloak.public_origin')` is null when the env var is
+        // unset, and a null key DEFEATS config()'s default argument — so the
+        // fallback has to be explicit here, or the authorize URL is emitted
+        // relative and Laravel absolutises it against the internal dial host.
+        $configured = config('services.keycloak.public_origin');
+        $publicOrigin = is_string($configured) && $configured !== '' ? $configured : $this->publicOrigin();
 
         $provider = new KeycloakProvider(
             $request,
