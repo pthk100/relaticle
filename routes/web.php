@@ -29,6 +29,7 @@ use App\Http\Controllers\Impersonation\StopImpersonationController;
 use App\Http\Controllers\JoinWorkspaceViaLinkController;
 use App\Http\Controllers\Mail\UnsubscribeController;
 use App\Http\Controllers\Media\ShowMediaController;
+use App\Http\Controllers\Platform\BrokerLoginController;
 use App\Http\Controllers\PrivacyPolicyController;
 use App\Http\Controllers\SwitchInvitationAccountController;
 use App\Http\Controllers\TermsOfServiceController;
@@ -54,6 +55,15 @@ use Spatie\MarkdownResponse\Middleware\ProvideMarkdownResponse;
 | be assigned to the "web" middleware group. Make something great!
 |
 */
+
+// ── Brokered module sign-in (fork addition — see NOTICE) ─────────────────────
+// The console mints a one-time token (WorkspaceSessionController, platform-key
+// guarded) and sends the browser here. NOT under `guest` or `auth`: the token IS
+// the credential, and a stale session from another tenant must still be switched
+// to the workspace the console named.
+Route::get('/auth/broker/{token}', BrokerLoginController::class)
+    ->name('platform.broker-login')
+    ->middleware('throttle:30,1');
 
 Route::middleware('guest')->group(function () {
     if (Feature::for(null)->active(SocialAuth::class)) {

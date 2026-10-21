@@ -31,6 +31,12 @@ final readonly class WorkspaceProvisionController
             // unique rule), so this endpoint does not duplicate them.
             'slug' => ['nullable', 'string', 'max:255'],
             'token_name' => ['nullable', 'string', 'max:255'],
+            // The TENANT-SCOPED owner identity. The orchestrator derives it from
+            // the workspace domain (`admin@<slug>.<base domain>`) — never the
+            // human's signup email, which is globally unique and would collide on
+            // the second tenant the same human signs up for (t_9f16c775).
+            'owner_email' => ['nullable', 'email', 'max:255'],
+            'owner_name' => ['nullable', 'string', 'max:255'],
         ]);
 
         try {
@@ -38,6 +44,8 @@ final readonly class WorkspaceProvisionController
                 (string) $validated['name'],
                 $validated['slug'] ?? null,
                 $validated['token_name'] ?? null,
+                $validated['owner_email'] ?? null,
+                $validated['owner_name'] ?? null,
             );
         } catch (RuntimeException $exception) {
             // Operator misconfiguration (no service user), not caller error.
@@ -50,6 +58,8 @@ final readonly class WorkspaceProvisionController
                 'name' => $result['workspace']->name,
                 'slug' => $result['workspace']->slug,
                 'token' => $result['token'],
+                'owner_email' => $result['owner']->email,
+                'owner_user_id' => $result['owner']->getKey(),
             ],
         ], 201);
     }

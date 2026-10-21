@@ -12,6 +12,7 @@ use App\Http\Controllers\Api\V1\PeopleUpsertController;
 use App\Http\Controllers\Api\V1\TasksController;
 use App\Http\Controllers\Api\V1\WorkspaceDeprovisionController;
 use App\Http\Controllers\Api\V1\WorkspaceProvisionController;
+use App\Http\Controllers\Api\V1\WorkspaceSessionController;
 use App\Http\Middleware\EnsureHostedWorkspaceAccess;
 use App\Http\Middleware\EnsurePlatformKey;
 use App\Http\Middleware\EnsureTokenHasAbility;
@@ -40,6 +41,11 @@ Route::prefix('v1')
     ->middleware([ForceJsonResponse::class, EnsurePlatformKey::class, 'throttle:api'])
     ->group(function (): void {
         Route::post('workspaces', WorkspaceProvisionController::class)->name('platform.workspaces.store');
+        // The console's session broker: mint a one-time login for a workspace's
+        // tenant owner, so a brand that signed up once never meets the CRM's own
+        // login (t_5df176cd). Same shared-secret guard, for the same reason — no
+        // workspace-pinned token can exist for a session being established.
+        Route::post('workspaces/{slug}/session', WorkspaceSessionController::class)->name('platform.workspaces.session');
         // Teardown counterpart — the orchestrator's cancel path deletes the tenant
         // by slug over the same platform-guarded group (a workspace-pinned token
         // cannot exist for a workspace being removed).

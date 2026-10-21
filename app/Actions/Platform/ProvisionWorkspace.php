@@ -27,14 +27,30 @@ use RuntimeException;
  */
 final readonly class ProvisionWorkspace
 {
-    public function __construct(private CreateWorkspace $createWorkspace) {}
+    public function __construct(
+        private CreateWorkspace $createWorkspace,
+        private ResolveTenantOwner $resolveTenantOwner,
+    ) {}
 
     /**
-     * @return array{workspace: Workspace, token: string}
+     * @return array{workspace: Workspace, owner: User, token: string}
      */
-    public function execute(string $name, ?string $slug = null, ?string $tokenName = null): array
-    {
-        $user = $this->serviceUser();
+    public function execute(
+        string $name,
+        ?string $slug = null,
+        ?string $tokenName = null,
+        ?string $ownerEmail = null,
+        ?string $ownerName = null,
+    ): array {
+        // The workspace's owner is the TENANT'S OWN identity when the caller names
+        // one (the orchestrator derives `admin@<slug>.<base domain>` from the
+        // signup). Only a caller that names no owner falls back to the shared
+        // platform service user — which is what the very first cut did for every
+        // tenant, leaving each workspace with no identity of its own to broker a
+        // session as (t_5df176cd).
+        $user = $ownerEmail !== null && $ownerEmail !== ''
+            ? $this->resolveTenantOwner->execute($ownerEmail, $ownerName)
+            : $this->serviceUser();
 
         $workspace = DB::transaction(
             fn (): Workspace => $this->createWorkspace->create($user, [
@@ -45,6 +61,7 @@ final readonly class ProvisionWorkspace
 
         return [
             'workspace' => $workspace,
+            'owner' => $user,
             'token' => $this->mintWorkspaceToken($user, $workspace, $tokenName),
         ];
     }

@@ -93,3 +93,43 @@ THIS IS THE FIRST FORK COMMIT THAT ALTERS AN UPSTREAM CODE PATH (the earlier
 additions were new files only). The change is deliberately minimal and localised
 to one method so it stays cheap to rebase; `main` is unaffected.
 
+
+THE MODIFICATION (2026-10-21) — tenant-owned workspaces + a session broker
+--------------------------------------------------------------------------
+Added: (a) a platform-guarded endpoint that mints a SINGLE-USE, short-lived
+sign-in for a workspace's own owner, and (b) a public web route that redeems it
+and establishes the panel session.
+
+Reason: a brand that signed up on the platform console was still asked to log in
+to the CRM — a second sign-up. The console brokers a module session from the
+console login, but Relaticle's panel is session-based (Filament) and no Sanctum
+bearer can stand in for a browser session. The hand-off is therefore a one-time
+token the browser redeems, which is the only HTTP-only way in.
+
+The same change gives a workspace an identity of its own. The first cut created
+EVERY workspace under the shared platform service user, so no tenant had a
+credential to broker AS, and all tenants shared one owner row. The owner is now
+the tenant-scoped identity derived from the signup (`admin@<slug>.<base domain>`
+— never a human's signup email, which is globally unique).
+
+Files added:
+  app/Actions/Platform/ResolveTenantOwner.php
+  app/Actions/Platform/EnsureWorkspaceOwner.php
+  app/Http/Controllers/Api/V1/WorkspaceSessionController.php
+  app/Http/Controllers/Platform/BrokerLoginController.php
+
+Files modified:
+  app/Actions/Platform/ProvisionWorkspace.php
+                        accepts an optional owner identity; falls back to the
+                        platform service user only when none is given (unchanged
+                        behaviour for a caller that names no owner)
+  app/Http/Controllers/Api/V1/WorkspaceProvisionController.php
+                        accepts and echoes owner_email / owner_user_id
+  routes/api.php        registers POST /api/v1/workspaces/{slug}/session in the
+                        platform-guarded group
+  routes/web.php        registers GET /auth/broker/{token} (NOT under `guest`
+                        or `auth`: the token IS the credential)
+
+NO UPSTREAM LOGIC WAS ALTERED. Workspace creation still runs through upstream's
+own App\Actions\Jetstream\CreateWorkspace; the broker only chooses the owning
+identity and hands back a one-time URL.
