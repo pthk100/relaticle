@@ -30,6 +30,7 @@ use App\Http\Controllers\JoinWorkspaceViaLinkController;
 use App\Http\Controllers\Mail\UnsubscribeController;
 use App\Http\Controllers\Media\ShowMediaController;
 use App\Http\Controllers\Platform\BrokerLoginController;
+use App\Http\Controllers\Platform\KeycloakFederationController;
 use App\Http\Controllers\PrivacyPolicyController;
 use App\Http\Controllers\SwitchInvitationAccountController;
 use App\Http\Controllers\TermsOfServiceController;
@@ -63,6 +64,24 @@ use Spatie\MarkdownResponse\Middleware\ProvideMarkdownResponse;
 // to the workspace the console named.
 Route::get('/auth/broker/{token}', BrokerLoginController::class)
     ->name('platform.broker-login')
+    ->middleware('throttle:30,1');
+
+// ── Federated CRM sign-in (fork addition — see NOTICE) ───────────────────────
+// Relaticle federates to the tenant's OWN Keycloak realm `tenant-<slug>` through
+// the Socialite seam: a real OIDC Authorization Code + PKCE round trip, not a
+// brokered stored credential (t_08c88bb4). `{workspace}` route-binds to the
+// workspace whose slug is the realm suffix, and the slug is carried in the
+// session — never in the OIDC parameters — so a forged callback cannot steer the
+// login to another tenant. Deliberately NOT under `guest`/`auth`: a stale
+// session from another tenant must still be switched to the workspace named.
+// The callback is declared FIRST so the literal `callback` segment is not
+// swallowed by the `{workspace}` placeholder above it.
+Route::get('/auth/keycloak/callback', [KeycloakFederationController::class, 'callback'])
+    ->name('platform.keycloak.callback')
+    ->middleware('throttle:30,1');
+Route::get('/auth/keycloak/{workspace}', [KeycloakFederationController::class, 'start'])
+    ->where('workspace', '[a-z0-9]+(?:-[a-z0-9]+)*')
+    ->name('platform.keycloak.start')
     ->middleware('throttle:30,1');
 
 Route::middleware('guest')->group(function () {

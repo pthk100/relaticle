@@ -151,3 +151,41 @@ Files modified:
 
 NO UPSTREAM LOGIC WAS ALTERED. The wizard itself is untouched and still runs for
 workspaces created through upstream's own registration UI.
+
+
+THE MODIFICATION (2026-10-21, part 3) — federate the CRM to the tenant's Keycloak
+---------------------------------------------------------------------------------
+Added: a Keycloak (OIDC) provider for Relaticle's Socialite seam and the two
+public routes that drive a federated sign-in, so the CRM accepts the SAME
+identity that signs the brand into the platform console — the tenant's own
+Keycloak realm `tenant-<slug>` — instead of a brokered stored credential.
+
+Reason: the previous session broker minted a one-time Relaticle login from a
+platform-held identity. The operator decision (2026-10-20) is to FEDERATE each
+module to Keycloak OIDC rather than broker a session, so this replaces the CRM
+half with a real Authorization Code + PKCE round trip against the tenant's realm.
+Relaticle is one deployment serving every tenant, so the realm is not a
+deployment-wide `config/services.php` client: it is named per request
+(`{workspace}` whose slug is the realm suffix), which is what makes the
+federation per-tenant rather than one shared login.
+
+Files added:
+  app/Socialite/KeycloakProvider.php
+      a bespoke Socialite provider (public client + PKCE; internal base URL for
+      the server-side token/userinfo calls, public origin for the browser hop)
+  app/Http/Controllers/Platform/KeycloakFederationController.php
+      start: GET /auth/keycloak/{workspace}  — begin the tenant's OIDC round trip
+      callback: GET /auth/keycloak/callback  — redeem the code, land in the panel
+
+Files modified:
+  routes/web.php        registers /auth/keycloak/{workspace} and
+                        /auth/keycloak/callback, NOT under `guest`/`auth`: a
+                        stale session from another tenant must still be switched
+                        to the workspace the console named
+  config/services.php   a `keycloak` block holding DEPLOYMENT-WIDE values only
+                        (public client id, the internal base URL, and an optional
+                        public origin override). The realm is per-tenant and
+                        never appears in config.
+
+NO UPSTREAM LOGIC WAS ALTERED. The Socialite callback Relaticle already ships is
+left in place and untouched; this is a separate provider plus two new routes.

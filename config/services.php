@@ -81,6 +81,19 @@ return [
         'proxy' => env('PROXY'),
     ],
 
+    /*
+    | The tenant's own Keycloak realm is the CRM's identity provider (fork
+    | addition — see NOTICE; App\Socialite\KeycloakProvider). Only DEPLOYMENT-WIDE
+    | values live here; the realm is per-tenant and is named on the request
+    | (`/auth/keycloak/{workspace}`), never in config. `public_origin` falls back
+    | to `app.url`'s origin when unset.
+    */
+    'keycloak' => [
+        'client_id' => env('KEYCLOAK_RELATICLE_CLIENT_ID', 'relaticle-crm'),
+        'internal_base_url' => env('KEYCLOAK_INTERNAL_URL', 'http://keycloak:8080'),
+        'public_origin' => env('KEYCLOAK_PUBLIC_ORIGIN'),
+    ],
+
     'stripe' => [
         'managed_payments' => (bool) env('STRIPE_MANAGED_PAYMENTS', true),
         'prices' => [

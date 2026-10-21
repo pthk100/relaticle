@@ -1,0 +1,132 @@
+<?php
+
+declare(strict_types=1);
+
+namespace App\Socialite;
+
+use Laravel\Socialite\Two\AbstractProvider;
+use Laravel\Socialite\Two\ProviderInterface;
+use Laravel\Socialite\Two\User;
+
+/**
+ * Keycloak OIDC provider — the tenant's OWN realm is the identity provider.
+ *
+ * Fork addition (see NOTICE). Upstream Relaticle ships Socialite with Google and
+ * Microsoft only; neither can be pointed at a Keycloak realm. This is the one
+ * provider the platform needs, so the CRM federates to the SAME identity that
+ * signs the brand into the console — realm `tenant-<slug>`, not a shared login.
+ *
+ * Per-tenant, built per request
+ * -----------------------------
+ * The realm is not a `config/services.php` entry: this deployment is ONE
+ * Relaticle serving every tenant, so a deployment-wide Keycloak client would be
+ * one shared credential. Instead the caller builds the provider for a named
+ * workspace (its slug is the realm), which is why the generic Filament login
+ * page never offers this provider — it has no tenant to point at.
+ *
+ * Public client + PKCE
+ * --------------------
+ * The realm's `relaticle-crm` client is a public OIDC client (Authorization Code
+ * + PKCE, S256). That removes the per-tenant client secret a confidential client
+ * would force us to store and rotate, and `Socialite` carries the code verifier
+ * itself. `client_secret` is therefore empty and is stripped from the token
+ * request (Keycloak rejects a public-client exchange that carries one).
+ *
+ * Two base URLs, on purpose
+ * -------------------------
+ * The browser must be sent to the PUBLIC origin (`https://<host>/realms/…`,
+ * which Caddy mounts on the deployment origin), while the token and userinfo
+ * calls are made server-side over the compose network (`http://keycloak:8080`).
+ * Conflating them either sends the browser to an unresolvable host or makes the
+ * code exchange hairpin through the public edge.
+ */
+final class KeycloakProvider extends AbstractProvider implements ProviderInterface
+{
+    /** @var array<int, string> */
+    protected $scopes = ['openid', 'profile', 'email'];
+
+    protected $scopeSeparator = ' ';
+
+    protected $usesPKCE = true;
+
+    private string $realm = '';
+
+    private string $internalBaseUrl = '';
+
+    private string $publicBaseUrl = '';
+
+    /**
+     * Bind the provider to one tenant realm. `$internalBaseUrl` is reached by
+     * this server; `$publicBaseUrl` is what the browser is sent to.
+     */
+    public function forRealm(string $realm, string $internalBaseUrl, string $publicBaseUrl): static
+    {
+        $this->realm = $realm;
+        $this->internalBaseUrl = rtrim($internalBaseUrl, '/');
+        $this->publicBaseUrl = rtrim($publicBaseUrl, '/');
+
+        return $this;
+    }
+
+    protected function getAuthUrl($state): string
+    {
+        return $this->buildAuthUrlFromBase(
+            "{$this->publicBaseUrl}/realms/{$this->realm}/protocol/openid-connect/auth",
+            $state,
+        );
+    }
+
+    protected function getTokenUrl(): string
+    {
+        return "{$this->internalBaseUrl}/realms/{$this->realm}/protocol/openid-connect/token";
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    protected function getUserByToken($token): array
+    {
+        $response = $this->getHttpClient()->get(
+            "{$this->internalBaseUrl}/realms/{$this->realm}/protocol/openid-connect/userinfo",
+            [
+                'headers' => [
+                    'Accept' => 'application/json',
+                    'Authorization' => 'Bearer '.$token,
+                ],
+            ],
+        );
+
+        $decoded = json_decode((string) $response->getBody(), true);
+
+        return is_array($decoded) ? $decoded : [];
+    }
+
+    /**
+     * @param  array<string, mixed>  $user
+     */
+    protected function mapUserToObject(array $user): User
+    {
+        return (new User)->setRaw($user)->map([
+            'id' => $user['sub'] ?? null,
+            'nickname' => $user['preferred_username'] ?? null,
+            'name' => $user['name'] ?? ($user['preferred_username'] ?? null),
+            'email' => $user['email'] ?? null,
+            'avatar' => null,
+        ]);
+    }
+
+    /**
+     * A public client must not send `client_secret` — Keycloak answers a
+     * public-client code exchange that carries one with `invalid_client`.
+     */
+    protected function getTokenFields($code): array
+    {
+        $fields = parent::getTokenFields($code);
+
+        if ($this->clientSecret === '' || $this->clientSecret === null) {
+            unset($fields['client_secret']);
+        }
+
+        return $fields;
+    }
+}
