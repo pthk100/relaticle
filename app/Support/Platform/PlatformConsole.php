@@ -19,6 +19,11 @@ namespace App\Support\Platform;
  * outright could not be rebased cheaply and would break every stock install.
  * Unset ⇒ null ⇒ upstream behaviour untouched. Configured ⇒ the auth pages are
  * closed and every entry is a 302 to the console.
+ *
+ * GIVE IT AN ABSOLUTE URL (`https://<origin>/console/`, as docker-compose does):
+ * the console lives at the ORIGIN, not under the CRM's `/crm` prefix, and a
+ * relative value is passed through Laravel's URL generator, which resolves it
+ * against the app root (the prefixed one).
  */
 final class PlatformConsole
 {

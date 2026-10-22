@@ -43,7 +43,11 @@ return [
         | The console that owns tenant sign-in, or unset for upstream self-host.
         | When set, the CRM's own login/password-reset pages 302 here instead of
         | taking a password (contract §8 item 3, card t_fc36fa36). Default is
-        | empty, NOT '/console/', so a stock fork install keeps upstream's pages.
+        | empty, NOT a path, so a stock fork install keeps upstream's pages.
+        |
+        | Give it the ABSOLUTE origin URL (https://<host>/console/): the console
+        | lives at the origin, not under this app's /crm prefix, and a relative
+        | value is resolved against the app root by the URL generator.
         */
         'console_url' => env('PLATFORM_CONSOLE_URL'),
     ],

@@ -48,7 +48,9 @@ final class RedirectPlatformAuthPagesToConsole
         }
 
         if ($this->isAuthPage($request)) {
-            return redirect()->to($console);
+            // away(): the console lives at the ORIGIN's /console/, not under the
+            // CRM's /crm prefix — `to()` would prepend the app base path.
+            return redirect()->away($console);
         }
 
         return $next($request);

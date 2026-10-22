@@ -140,12 +140,16 @@ it('?continue=1 falls back to the console when no federated sign-in was recorded
 // ── 3. /crm/login must not serve a tenant (contract §8 item 3) ──────────────
 
 it('sends /login to the console when the deployment declares one', function (): void {
-    config()->set('relaticle.platform.console_url', '/console/');
+    config()->set('relaticle.platform.console_url', 'https://console.example.test/console/');
 
     expect(PlatformConsole::isConfigured())->toBeTrue();
 
-    $res = $this->get('/login');
-    expect((string) $res->headers->get('Location'))->toBe('http://relaticle.test/console');
+    // An ABSOLUTE console URL is what a deployment sets (compose does): the
+    // console lives at the origin's `/console/`, NOT under the CRM's /crm prefix,
+    // and a relative value would be resolved against the app root by the URL
+    // generator. The assertion that matters is that it never lands on /crm/...
+    expect($this->get('/login')->headers->get('Location'))
+        ->toBe('https://console.example.test/console/');
 });
 
 it('keeps upstream behaviour for /login when no console is configured', function (): void {
@@ -158,11 +162,11 @@ it('keeps upstream behaviour for /login when no console is configured', function
 });
 
 it('302s the panel login and password-reset pages to the console', function (): void {
-    config()->set('relaticle.platform.console_url', '/console/');
+    config()->set('relaticle.platform.console_url', 'https://console.example.test/console/');
 
     foreach (['/app/login', '/app/password-reset/request'] as $path) {
         $res = $this->get($path);
-        expect((string) $res->headers->get('Location'))->toBe('http://relaticle.test/console', $path);
+        expect((string) $res->headers->get('Location'))->toBe('https://console.example.test/console/', $path);
     }
 });
 

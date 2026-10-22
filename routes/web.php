@@ -105,7 +105,11 @@ Route::get('/auth/logout', LogoutController::class)
 // group on purpose: `guest` would answer a SIGNED-IN visitor with a redirect to
 // the dashboard, so the same URL would mean two different things.
 Route::get('/login', function (): RedirectResponse {
-    return redirect()->to(PlatformConsole::url() ?? url()->getAppUrl('login'));
+    // away(), not to(): `to()` runs the path through the URL generator, which
+    // prepends the app's /crm base — the console lives at the ORIGIN's /console/,
+    // not under the CRM's prefix. A root-relative Location is what the browser
+    // resolves against the origin, which is exactly the contract's target.
+    return redirect()->away(PlatformConsole::url() ?? url()->getAppUrl('login'));
 })->name('login');
 
 Route::middleware('guest')->group(function () {
