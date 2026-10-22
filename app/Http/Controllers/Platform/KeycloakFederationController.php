@@ -8,6 +8,7 @@ use App\Models\User;
 use App\Models\UserSocialAccount;
 use App\Models\Workspace;
 use App\Socialite\KeycloakProvider;
+use App\Support\Platform\KeycloakEndSession;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -88,15 +89,15 @@ final class KeycloakFederationController
         $workspace = Workspace::query()->where('slug', $slug)->first();
         abort_unless($workspace instanceof Workspace, 403, 'Unknown workspace.');
 
+        $provider = $this->provider($request, $slug);
         try {
-            $social = $this->provider($request, $slug)->user();
+            $social = $provider->user();
         } catch (InvalidStateException) {
             abort(403, 'Authentication state mismatch. Please try again.');
         }
 
         $subject = (string) $social->getId();
         abort_if($subject === '', 403, 'The identity provider returned no subject.');
-
         $realm = 'tenant-'.$slug;
 
         $user = DB::transaction(function () use ($realm, $subject, $social, $workspace): User {
@@ -128,6 +129,9 @@ final class KeycloakFederationController
         // pre-existing cookie cannot keep another tenant's context.
         Auth::login($user);
         $request->session()->regenerate();
+
+        $this->rememberSignOut($request, $realm, $provider);
+
         $user->switchWorkspace($workspace);
 
         return redirect()->to(url(config('app.app_panel_path', 'app')));
@@ -208,18 +212,31 @@ final class KeycloakFederationController
     }
 
     /**
-     * The scheme://host the browser reaches this deployment on. Derived from
-     * `APP_URL`, whose path is `/crm` on this deployment — the realm endpoints
-     * live at the ORIGIN (`/realms/…`), not under the `/crm` prefix.
+     * What a later sign-out needs to end this realm's SSO session (t_fc36fa36,
+     * spec §2 D3): the id_token Keycloak just issued and the realm it belongs to.
+     *
+     * Written AFTER `regenerate()` (which rotates the id but keeps the data) and
+     * only if the provider still holds a token response — a build without one
+     * leaves `end_session_url` null, which the sign-out reports rather than hides.
+     */
+    private function rememberSignOut(Request $request, string $realm, KeycloakProvider $provider): void
+    {
+        $request->session()->put(KeycloakEndSession::SESSION_KEY, [
+            'realm' => $realm,
+            'id_token' => $provider->idToken(),
+        ]);
+    }
+
+    /**
+     * The scheme://host the browser reaches this deployment on.
+     *
+     * Derived from `APP_URL`, whose path is `/crm` on this deployment — the realm
+     * endpoints live at the ORIGIN (`/realms/…`), not under the `/crm` prefix.
+     * Shared with the sign-out leg so both halves build the same origin
+     * ({@see KeycloakEndSession::origin()}).
      */
     private function publicOrigin(): string
     {
-        $parts = parse_url((string) config('app.url'));
-
-        $scheme = $parts['scheme'] ?? 'https';
-        $host = $parts['host'] ?? 'localhost';
-        $port = isset($parts['port']) ? ':'.$parts['port'] : '';
-
-        return "{$scheme}://{$host}{$port}";
+        return KeycloakEndSession::origin();
     }
 }

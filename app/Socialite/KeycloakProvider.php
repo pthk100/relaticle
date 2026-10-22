@@ -56,6 +56,20 @@ final class KeycloakProvider extends AbstractProvider implements ProviderInterfa
     private string $publicBaseUrl = '';
 
     /**
+     * The token response from the code exchange, retained for sign-out.
+     *
+     * Fork addition (see NOTICE; card t_fc36fa36). The parent reads the identity
+     * out of the access token ({@see self::getUserByToken()}) and throws the
+     * response away — which also throws away `id_token`, the ONE credential an
+     * RP-initiated logout needs: without `id_token_hint` Keycloak cannot tell
+     * which SSO session to end and answers a confirmation page instead of signing
+     * out. Retained in memory only; the caller stores it with the session.
+     *
+     * @var array<string, mixed>|null
+     */
+    private ?array $tokenResponse = null;
+
+    /**
      * Bind the provider to one tenant realm. `$internalBaseUrl` is reached by
      * this server; `$publicBaseUrl` is what the browser is sent to.
      */
@@ -128,6 +142,8 @@ final class KeycloakProvider extends AbstractProvider implements ProviderInterfa
     /**
      * A public client must not send `client_secret` — Keycloak answers a
      * public-client code exchange that carries one with `invalid_client`.
+     *
+     * @return array<string, mixed>
      */
     protected function getTokenFields($code): array
     {
@@ -138,5 +154,32 @@ final class KeycloakProvider extends AbstractProvider implements ProviderInterfa
         }
 
         return $fields;
+    }
+
+    /**
+     * Keep the token response the parent discards (fork addition, t_fc36fa36).
+     *
+     * `AbstractProvider::user()` calls this and then reads only the access token;
+     * the `id_token` it carries is the only thing that lets a later sign-out end
+     * the realm's SSO session without prompting. Memory-only: the callback reads
+     * {@see self::idToken()} immediately and writes it to the session.
+     *
+     * @return array<string, mixed>
+     */
+    public function getAccessTokenResponse($code)
+    {
+        $response = parent::getAccessTokenResponse($code);
+
+        $this->tokenResponse = is_array($response) ? $response : null;
+
+        return $response;
+    }
+
+    /** The OIDC id_token from the last code exchange, or null when absent. */
+    public function idToken(): ?string
+    {
+        $token = $this->tokenResponse['id_token'] ?? null;
+
+        return is_string($token) && $token !== '' ? $token : null;
     }
 }

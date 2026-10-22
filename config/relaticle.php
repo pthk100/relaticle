@@ -38,6 +38,14 @@ return [
         'api_key' => env('PLATFORM_API_KEY'),
         'service_user_email' => env('PLATFORM_SERVICE_USER_EMAIL', 'platform@relaticle.invalid'),
         'service_user_name' => env('PLATFORM_SERVICE_USER_NAME', 'Platform Provisioning'),
+
+        /*
+        | The console that owns tenant sign-in, or unset for upstream self-host.
+        | When set, the CRM's own login/password-reset pages 302 here instead of
+        | taking a password (contract §8 item 3, card t_fc36fa36). Default is
+        | empty, NOT '/console/', so a stock fork install keeps upstream's pages.
+        */
+        'console_url' => env('PLATFORM_CONSOLE_URL'),
     ],
 
     /*

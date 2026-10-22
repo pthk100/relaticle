@@ -33,6 +33,7 @@ use App\Http\Middleware\CheckScheduledDeletion;
 use App\Http\Middleware\DenySearchIndexing;
 use App\Http\Middleware\EnsureAuthenticationComplete;
 use App\Http\Middleware\EnsureHostedWorkspaceAccess;
+use App\Http\Middleware\RedirectPlatformAuthPagesToConsole;
 use App\Http\Middleware\RedirectToWorkspaceSetup;
 use App\Http\Middleware\StopImpersonationOnLogout;
 use App\Http\Middleware\SuperviseImpersonation;
@@ -358,6 +359,39 @@ final class AppPanelProvider extends PanelProvider
     }
 
     /**
+     * The panel's own redirect routes.
+     *
+     * Extracted from panel(), which is on the shrink-only method-length list
+     * (phpstan-method-length.php) — t_fc36fa36 needs one more middleware in that
+     * method, so the routes moved out rather than growing it.
+     */
+    private function panelRedirectRoutes(Panel $panel): void
+    {
+        Route::get('/register', fn (): RedirectResponse => redirect()->to(Filament::getLoginUrl()))
+            ->name('auth.register');
+        Route::get('/scheduled-deletion', ScheduledDeletionInterstitial::class)
+            ->middleware($panel->getAuthMiddleware())
+            ->name('scheduled-deletion');
+        Route::post('/timezone', SyncUserTimezoneController::class)
+            ->middleware($panel->getAuthMiddleware())
+            ->name('timezone.sync');
+
+        Route::get('/{tenant}/tasks-board', fn (string $tenant) => redirect()->to(TaskResource::getUrl('board', ['tenant' => $tenant]), status: 301))
+            ->name('tasks-board.redirect');
+        Route::get('/{tenant}/opportunities-board', fn (string $tenant) => redirect()->to(OpportunityResource::getUrl('board', ['tenant' => $tenant]), status: 301))
+            ->name('opportunities-board.redirect');
+
+        Route::get('/{tenant}/team/{page?}', fn (string $tenant, ?string $page = null) => redirect()->to(match ($page) {
+            'members' => Members::getUrl(['tenant' => $tenant]),
+            'activity' => ActivityLog::getUrl(['tenant' => $tenant]),
+            'custom-fields' => CustomFields::getUrl(['tenant' => $tenant]),
+            default => EditWorkspace::getUrl(['tenant' => $tenant]),
+        }, status: 301))
+            ->where('page', 'members|activity|custom-fields')
+            ->name('team.redirect');
+    }
+
+    /**
      * Configure the Filament admin panel.
      *
      * @throws Exception
@@ -420,28 +454,7 @@ final class AppPanelProvider extends PanelProvider
                 '*/email-accounts/redirect/*',
             ])
             ->routes(function () use ($panel): void {
-                Route::get('/register', fn (): RedirectResponse => redirect()->to(Filament::getLoginUrl()))
-                    ->name('auth.register');
-                Route::get('/scheduled-deletion', ScheduledDeletionInterstitial::class)
-                    ->middleware($panel->getAuthMiddleware())
-                    ->name('scheduled-deletion');
-                Route::post('/timezone', SyncUserTimezoneController::class)
-                    ->middleware($panel->getAuthMiddleware())
-                    ->name('timezone.sync');
-
-                Route::get('/{tenant}/tasks-board', fn (string $tenant) => redirect()->to(TaskResource::getUrl('board', ['tenant' => $tenant]), status: 301))
-                    ->name('tasks-board.redirect');
-                Route::get('/{tenant}/opportunities-board', fn (string $tenant) => redirect()->to(OpportunityResource::getUrl('board', ['tenant' => $tenant]), status: 301))
-                    ->name('opportunities-board.redirect');
-
-                Route::get('/{tenant}/team/{page?}', fn (string $tenant, ?string $page = null) => redirect()->to(match ($page) {
-                    'members' => Members::getUrl(['tenant' => $tenant]),
-                    'activity' => ActivityLog::getUrl(['tenant' => $tenant]),
-                    'custom-fields' => CustomFields::getUrl(['tenant' => $tenant]),
-                    default => EditWorkspace::getUrl(['tenant' => $tenant]),
-                }, status: 301))
-                    ->where('page', 'members|activity|custom-fields')
-                    ->name('team.redirect');
+                $this->panelRedirectRoutes($panel);
             })
             ->breadcrumbs(false)
             ->sidebarCollapsibleOnDesktop()
@@ -463,6 +476,11 @@ final class AppPanelProvider extends PanelProvider
                 ShareErrorsFromSession::class,
                 PreventRequestForgery::class,
                 SubstituteBindings::class,
+                // t_fc36fa36: the panel's own login / password-reset pages 302 to
+                // the platform console when this deployment declares one. Runs
+                // here — before the page component — because Livewire's mount()
+                // redirect is a 200+effect, never the 302 the contract requires.
+                RedirectPlatformAuthPagesToConsole::class,
                 DisableBladeIconComponents::class,
                 DispatchServingFilamentEvent::class,
                 DenySearchIndexing::class,

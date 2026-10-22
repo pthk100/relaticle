@@ -31,11 +31,13 @@ use App\Http\Controllers\Mail\UnsubscribeController;
 use App\Http\Controllers\Media\ShowMediaController;
 use App\Http\Controllers\Platform\BrokerLoginController;
 use App\Http\Controllers\Platform\KeycloakFederationController;
+use App\Http\Controllers\Platform\LogoutController;
 use App\Http\Controllers\PrivacyPolicyController;
 use App\Http\Controllers\SwitchInvitationAccountController;
 use App\Http\Controllers\TermsOfServiceController;
 use App\Http\Middleware\AddVaryAcceptHeader;
 use App\Http\Middleware\ThrottleBeforeAuthentication;
+use App\Support\Platform\PlatformConsole;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Response;
 use Illuminate\Session\Middleware\AuthenticateSession;
@@ -87,6 +89,25 @@ Route::get('/auth/keycloak/{workspace:slug}', [KeycloakFederationController::cla
     ->name('platform.keycloak.start')
     ->middleware('throttle:30,1');
 
+// ── Platform sign-out (fork addition — see NOTICE) ───────────────────────────
+// The console's sign-out forwards the browser's OWN session cookie here on one
+// bounded internal call, so the `sessions` row is destroyed rather than merely
+// un-cookied (contract §3.3, card t_fc36fa36). GET, so the call needs no CSRF
+// token; deliberately NOT under `guest`/`auth`, because an already-dead session
+// must be a 200 no-op — the caller cannot follow a redirect.
+Route::get('/auth/logout', LogoutController::class)
+    ->name('platform.logout');
+
+// ── The login door (fork addition — see NOTICE) ──────────────────────────────
+// Contract §8 item 3: `/crm/login` must not serve a tenant. When the deployment
+// declares a platform console this answers `/console/`; unset (stock self-host)
+// it keeps upstream's redirect to the panel's own login. OUTSIDE the `guest`
+// group on purpose: `guest` would answer a SIGNED-IN visitor with a redirect to
+// the dashboard, so the same URL would mean two different things.
+Route::get('/login', function (): RedirectResponse {
+    return redirect()->to(PlatformConsole::url() ?? url()->getAppUrl('login'));
+})->name('login');
+
 Route::middleware('guest')->group(function () {
     if (Feature::for(null)->active(SocialAuth::class)) {
         Route::get('/auth/redirect/{provider}', RedirectController::class)
@@ -99,8 +120,6 @@ Route::middleware('guest')->group(function () {
 
     Route::post('/two-factor-challenge/cancel', [MfaChallengeController::class, 'destroy'])
         ->name('two-factor.cancel');
-
-    Route::get('/login', fn () => redirect()->to(url()->getAppUrl('login')))->name('login');
 
     Route::get('/register', fn () => redirect()->to(url()->getAppUrl('login')))->name('register');
 
