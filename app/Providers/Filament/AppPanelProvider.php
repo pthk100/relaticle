@@ -45,6 +45,7 @@ use App\Models\Workspace;
 use App\Support\BrandColors;
 use App\Support\Impersonation\Impersonator;
 use App\Support\OutlinedIcons;
+use App\Support\Platform\TenantSurface;
 use App\Support\SupportForms;
 use Asmit\ResizedColumn\ResizedColumnPlugin;
 use Exception;
@@ -326,6 +327,37 @@ final class AppPanelProvider extends PanelProvider
     }
 
     /**
+     * WHOSE NAME THIS DEPLOYMENT CARRIES.
+     *
+     * One Relaticle serves every tenant behind the reseller's own domains, so the
+     * product mark names the wrong party on a tenant's surface: a federated tenant
+     * session renders ITS workspace name (TenantSurface::brandName) while every
+     * other caller keeps the deployment's own name. Both answers are Closures
+     * because neither exists when the panel is built: the tenant is bound by
+     * middleware, and the brand is read at RENDER time (the <title>, the sidebar
+     * logo and the footer all ask for it).
+     *
+     * The logo goes null for a tenant, which falls through to the brand name as
+     * text in Filament's logo component: both existing logo views carry the
+     * product mark, one visibly and one as an sr-only label.
+     *
+     * Extracted from panel(), which is on the shrink-only method-length list
+     * (phpstan-method-length.php).
+     */
+    private function applyBranding(Panel $panel): Panel
+    {
+        return $panel
+            ->homeUrl(fn (): string => Dashboard::getUrl())
+            ->brandName(fn (): string => TenantSurface::brandName())
+            ->brandLogo(fn (): View|Factory|null => TenantSurface::isTenantSession()
+                ? null
+                : (Auth::user()?->hasVerifiedEmail()
+                    ? view('filament.app.logo-empty')
+                    : view('filament.app.logo')))
+            ->brandLogoHeight('2.6rem');
+    }
+
+    /**
      * Configure the Filament admin panel.
      *
      * @throws Exception
@@ -342,13 +374,9 @@ final class AppPanelProvider extends PanelProvider
             $panel->path(config('app.app_panel_path', 'app'));
         }
 
+        $panel = $this->applyBranding($panel);
+
         $panel
-            ->homeUrl(fn (): string => Dashboard::getUrl())
-            ->brandName('Relaticle')
-            ->brandLogo(fn (): View|Factory => Auth::user()?->hasVerifiedEmail()
-                ? view('filament.app.logo-empty')
-                : view('filament.app.logo'))
-            ->brandLogoHeight('2.6rem')
             ->login(Login::class)
             ->authGuard('web')
             ->authPasswordBroker('users')

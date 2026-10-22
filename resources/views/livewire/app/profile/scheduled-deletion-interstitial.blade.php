@@ -80,7 +80,7 @@
 
     {{-- Footer --}}
     <div class="flex items-center justify-center gap-x-1 py-6 text-xs text-gray-400 dark:text-gray-500">
-        <span>&copy; {{ date('Y') }} Relaticle</span>
+        <span>&copy; {{ date('Y') }} {{ \App\Support\Platform\TenantSurface::brandName() }}</span>
         <span>&middot;</span>
         <a href="{{ url('/privacy-policy') }}" class="transition hover:text-gray-600 dark:hover:text-gray-300">Privacy Policy</a>
         <span>&middot;</span>

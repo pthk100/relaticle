@@ -396,7 +396,7 @@ Alpine.data('chatInterface', (initialConversationId, sendUrl, initialMessage, in
             if (!detail.conversationId || detail.conversationId !== this.conversationId) return;
 
             // Update document.title for the browser tab.
-            document.title = `${detail.title || @js(__('Untitled chat'))} - ${@js(config('app.name'))}`;
+            document.title = `${detail.title || @js(__('Untitled chat'))} - ${@js(\App\Support\Platform\TenantSurface::brandName())}`;
 
             const title = document.querySelector('[data-page-heading]');
             if (title && detail.title) {

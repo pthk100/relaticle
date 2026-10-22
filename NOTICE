@@ -189,3 +189,52 @@ Files modified:
 
 NO UPSTREAM LOGIC WAS ALTERED. The Socialite callback Relaticle already ships is
 left in place and untouched; this is a separate provider plus two new routes.
+
+
+THE MODIFICATION (2026-10-23, part 4) — tenant surface: no workspace creation, the
+tenant's own name on the chrome
+-------------------------------------------------------------------------------
+Added: one predicate — "did this session arrive through the platform's federated
+hand-off?" — and the two rules that follow from it.
+
+Reason: the platform creates each tenant's workspace itself, so a tenant that
+could create another one would sit outside the orchestrator's tenant list while
+looking connected (nothing provisions, bills or tears that workspace down). The
+CRM also rendered its own product mark on a surface that belongs to the reseller
+and the tenant, not to us.
+
+WHAT MARKS A TENANT SESSION: the federated identity link
+`UserSocialAccount(provider_name: 'keycloak', provider_id: '<realm>|<sub>')` whose
+realm is `tenant-<slug>` — written only by the federation callback above. A local
+user (upstream's own self-host onboarding) has no such link, so it keeps the
+registration flow and the deployment's own name; that is what keeps this fork
+cheap to rebase.
+
+Files added:
+  app/Support/Platform/TenantSurface.php
+      isTenantSession() — the predicate above (per-request memo)
+      brandName()       — the bound workspace's name for a tenant session,
+                          config('app.name') for every other caller
+  tests/Feature/Platform/TenantSurfaceTest.php
+
+Files modified:
+  app/Filament/Pages/CreateWorkspace.php
+      canView() returns false for a tenant session (Filament gates BOTH the page
+      — a 404 — and the workspace switcher's "Create Workspace" item on it), and
+      mount() aborts before the over-cap branch so a tenant is refused rather
+      than told it hit a limit. Untouched for every other user.
+  app/Providers/Filament/AppPanelProvider.php
+      brandName/brandLogo are now resolved per request instead of the literal
+      'Relaticle'; a tenant's logo is null (Filament then renders the brand NAME
+      as text), because both logo views carry the product mark.
+  packages/Chat/resources/views/livewire/chat/chat-interface.blade.php
+  resources/views/components/onboarding/shell.blade.php
+  resources/views/livewire/app/profile/scheduled-deletion-interstitial.blade.php
+      the chat tab title and the two footers name the resolved brand rather than
+      a hardcoded product name (a no-op for a self-host deployment, whose
+      config('app.name') is still Relaticle).
+
+NO UPSTREAM LOGIC WAS ALTERED. Workspace creation, the registration wizard and the
+provisioning endpoint (`POST /api/v1/workspaces`, X-Platform-Key) are untouched;
+the new predicate only removes the affordance from sessions the platform itself
+provisioned.

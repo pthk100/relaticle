@@ -12,6 +12,7 @@ use App\Filament\Pages\Concerns\BuildsOnboardingPreview;
 use App\Models\User;
 use App\Models\Workspace;
 use App\Rules\ValidWorkspaceSlug;
+use App\Support\Platform\TenantSurface;
 use App\Support\WorkspaceUrlPrefix;
 use BackedEnum;
 use Filament\Actions\Action;
@@ -54,9 +55,31 @@ final class CreateWorkspace extends RegisterTenant
         return Width::FiveExtraLarge;
     }
 
+    /**
+     * A tenant session never sees this flow. Filament gates BOTH the page (a bare
+     * 404 from `mount()`/`register()`/`hydrate()`) and the workspace switcher's
+     * "Create Workspace" item on this, so one predicate closes every affordance.
+     *
+     * The platform creates the tenant's workspace for it (platform-key guarded
+     * `POST /api/v1/workspaces`); a tenant that made its own would sit outside the
+     * orchestrator's tenancy while looking connected. Upstream's self-host
+     * onboarding has no federation link, so it is unaffected.
+     */
+    #[Override]
+    public static function canView(): bool
+    {
+        return ! TenantSurface::isTenantSession() && parent::canView();
+    }
+
     #[Override]
     public function mount(): void
     {
+        // A tenant session is refused outright, BEFORE the limit branch below:
+        // that branch answers an over-cap user with a notice and a redirect, which
+        // would tell a tenant they hit a cap rather than that creation is not
+        // theirs to do (see canView()). Same 404 the route/menu gating produces.
+        abort_if(TenantSurface::isTenantSession(), 404);
+
         // Filament answers an over-cap visit with a bare 404, which reads as a broken
         // link rather than a limit the user can act on.
         if (! self::canView()) {
