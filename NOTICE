@@ -295,3 +295,67 @@ Files modified:
 NO UPSTREAM LOGIC WAS ALTERED. Upstream's Filament logout route, its login pages
 and the Socialite callback remain in place and untouched; every new behaviour is
 gated on deployment configuration (PLATFORM_CONSOLE_URL) or is a new route.
+
+
+THE MODIFICATION (2026-10-26, part 6) — the `← Console` exit
+------------------------------------------------------------
+Added: a `← Console` control in the app panel's authenticated chrome — the
+topbar's trailing cluster, on every page — so a person who entered the CRM
+through the platform's federated hand-off can return to the console that owns
+their identity, from any screen, without editing the address bar.
+
+Reason: `design/CONTRACT.md` §11 requirement 7 makes the exit mandatory for every
+module — *"a way back to the console; no trapping, and no module-owned logout that
+strands the user"* — and the console's own side of the same table promises "a way
+back, always". The two module SPAs that the platform ships (the Workflow Builder
+canvas and the Inbox) already carry the control and both build it as
+
+    /console/?realm=<slug>&returnTo=<url-encoded path>
+
+so this is the same URL shape in the fourth codebase, not a fourth shape. The CRM
+previously had no console-return control at all: its own sign-in surface is closed
+when PLATFORM_CONSOLE_URL is set (§ part 5), so a tenant that wanted out of the
+CRM had to edit the URL — trapping, exactly what §11.7 forbids.
+
+WHERE THE REALM COMES FROM. The session, server-side, from the two records this
+fork's federation writes — never a constant, and never a value the browser
+supplies: the `{realm, id_token}` entry the callback stores for sign-out (part 5),
+or the federated identity link `UserSocialAccount(provider_name: 'keycloak',
+provider_id: '<realm>|<sub>')` (part 4), which also covers a session established
+before the id_token was retained. A session with neither (a stock self-host local
+user, the platform operator) gets the realm omitted, which is the documented
+fallback: the console's front door asks which workspace rather than the link
+guessing one. The realm is validated as a single path segment before it is used.
+
+Files added:
+  app/Support/Platform/ConsoleExit.php
+      the fork's ONE builder of `/console/?realm=<slug>&returnTo=<…>`: the realm
+      (as above), `returnTo` from the browser's own request URI (nginx hands PHP
+      the unrewritten REQUEST_URI, so the /crm prefix is included), RFC3986
+      encoding to match the browsers' `encodeURIComponent`, and NO control at all
+      when the deployment declares no console
+  app/Providers/PlatformConsoleExitServiceProvider.php
+      registers the control into `PanelsRenderHook::USER_MENU_BEFORE`, narrowed
+      to the `app` panel (the sysadmin panel has no console to return to). A
+      separate provider because AppPanelProvider::panel() is on the fork's
+      shrink-only method-length budget.
+  resources/views/filament/app/console-exit.blade.php
+      the anchor: a plain document navigation (no `wire:navigate`), titled with
+      the tenant's own name where the session is a tenant's
+  tests/Feature/Platform/ConsoleExitTest.php
+
+Files modified:
+  app/Support/Platform/TenantSurface.php
+      new tenantRealm() — the realm half of the federated identity link, memoised
+      together with isTenantSession() (both read the same row) — plus the memo's
+      type widened from bool to `string|null`
+  bootstrap/providers.php
+      registers the new provider
+  lang/en/filament/panel.php
+      the control's accessible name (two keys; `lang/fr` has no panel.php and
+      falls back to English as it already did)
+
+NO UPSTREAM LOGIC WAS ALTERED. The control is a render hook in this deployment's
+own panel provider plus new files; it is emitted only when PLATFORM_CONSOLE_URL is
+configured, so a stock self-host install renders exactly what it rendered before.
+No route, controller, layout or vendor view is patched.

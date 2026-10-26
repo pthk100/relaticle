@@ -11,6 +11,7 @@ use App\Providers\HorizonServiceProvider;
 use App\Providers\JetstreamServiceProvider;
 use App\Providers\LocaleServiceProvider;
 use App\Providers\MacroServiceProvider;
+use App\Providers\PlatformConsoleExitServiceProvider;
 use Relaticle\Chat\ChatServiceProvider;
 use Relaticle\Documentation\DocumentationServiceProvider;
 use Relaticle\EmailIntegration\EmailIntegrationServiceProvider;
@@ -27,6 +28,7 @@ return [
     JetstreamServiceProvider::class,
     LocaleServiceProvider::class,
     MacroServiceProvider::class,
+    PlatformConsoleExitServiceProvider::class,
     ChatServiceProvider::class,
     DocumentationServiceProvider::class,
     EmailIntegrationServiceProvider::class,

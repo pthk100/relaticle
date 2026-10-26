@@ -29,6 +29,15 @@ return [
         'resize' => 'Resize sidebar',
     ],
 
+    /**
+     * The `← Console` exit (card t_619a7e0f). `exit_title_branded` is the
+     * accessible name for a tenant session, whose own workspace name is the brand.
+     */
+    'console' => [
+        'exit_title' => 'Back to the platform console',
+        'exit_title_branded' => 'Back to the :brand console',
+    ],
+
     'payload_too_large' => 'That change is too large to save. Shorten the content and try again.',
 
     'selects' => [

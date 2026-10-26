@@ -9,6 +9,7 @@ use App\Models\UserSocialAccount;
 use App\Models\Workspace;
 use Filament\Facades\Filament;
 use Illuminate\Contracts\Auth\Authenticatable;
+use Illuminate\Support\Str;
 
 /**
  * The surface a platform-provisioned tenant session sees.
@@ -50,15 +51,16 @@ final class TenantSurface
     private const string TENANT_REALM_PREFIX = 'tenant-';
 
     /**
-     * Per-request memo. Several chrome elements ask for the brand on one render
-     * (the <title>, the sidebar logo, the footer) and the answer cannot change
-     * within a request: a federation link is written on the callback, then the
-     * browser is redirected. Not a cross-request cache: php-fpm gives every
-     * request a fresh process.
+     * Per-request memo of the realm named by each user's federated identity link,
+     * or null for a user with none. Several chrome elements ask on one render (the
+     * brand, the `← Console` exit) and the answer cannot change within a request:
+     * a federation link is written on the callback, then the browser is
+     * redirected. Not a cross-request cache: php-fpm gives every request a fresh
+     * process.
      *
-     * @var array<string, bool>
+     * @var array<string, string|null>
      */
-    private static array $tenantIdentities = [];
+    private static array $tenantRealms = [];
 
     /**
      * Did this session arrive through the platform's federated hand-off?
@@ -73,11 +75,61 @@ final class TenantSurface
 
         $key = (string) $user->getKey();
 
-        return self::$tenantIdentities[$key] ??= UserSocialAccount::query()
+        // Memoised together with tenantRealm() below: both read the same row, and
+        // the chrome asks for both on one render (the brand and the console exit).
+        if (! array_key_exists($key, self::$tenantRealms)) {
+            self::$tenantRealms[$key] = self::resolveTenantRealm($user);
+        }
+
+        return self::$tenantRealms[$key] !== null;
+    }
+
+    /**
+     * The realm this session federated through (`tenant-<slug>`), or null when it
+     * did not arrive through the platform's hand-off.
+     *
+     * The full realm, not the bare slug: a caller that has to act on it (the
+     * `← Console` exit, {@see ConsoleExit}) drops the prefix like every other
+     * consumer of a realm does, and a caller that signs the person out wants the
+     * realm Keycloak named.
+     */
+    public static function tenantRealm(?Authenticatable $user = null): ?string
+    {
+        $user ??= Filament::auth()->user();
+
+        if (! $user instanceof User) {
+            return null;
+        }
+
+        $key = (string) $user->getKey();
+
+        if (! array_key_exists($key, self::$tenantRealms)) {
+            self::$tenantRealms[$key] = self::resolveTenantRealm($user);
+        }
+
+        return self::$tenantRealms[$key];
+    }
+
+    /**
+     * The realm half of the federated identity link (`<realm>|<sub>`), when the
+     * link names a TENANT realm. Written only by the federation callback, so it is
+     * exactly the population that arrived through the platform.
+     */
+    private static function resolveTenantRealm(User $user): ?string
+    {
+        $providerId = UserSocialAccount::query()
             ->where('user_id', $user->getKey())
             ->where('provider_name', self::PROVIDER)
             ->where('provider_id', 'like', self::TENANT_REALM_PREFIX.'%')
-            ->exists();
+            ->value('provider_id');
+
+        if (! is_string($providerId) || $providerId === '') {
+            return null;
+        }
+
+        $realm = Str::before($providerId, '|');
+
+        return $realm === '' ? null : $realm;
     }
 
     /**
@@ -107,6 +159,6 @@ final class TenantSurface
      */
     public static function forget(): void
     {
-        self::$tenantIdentities = [];
+        self::$tenantRealms = [];
     }
 }
