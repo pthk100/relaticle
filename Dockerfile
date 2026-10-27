@@ -50,7 +50,9 @@ RUN pnpm run build
 ###########################################
 # Stage 3: Production image
 ###########################################
-FROM serversideup/php:8.5-fpm-nginx AS production
+# Pinned from serversideup/php:8.5-fpm-nginx, resolved 2026-10-27. Minimum acceptable is 8.5.12, the PHP2Shell fix (CVE-2026-109618/109619).
+# Re-resolve this digest when PHP 8.5 ships a security fix; a digest never moves on its own, a floating tag moves backwards silently.
+FROM serversideup/php@sha256:7b3b42fb8b9bd4b5225d51585d039d19fe01fe421f3d94676c8c2e5a3369b103 AS production
 
 LABEL org.opencontainers.image.title="Relaticle CRM"
 LABEL org.opencontainers.image.description="Modern, open-source CRM platform"
