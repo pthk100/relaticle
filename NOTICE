@@ -545,6 +545,51 @@ reconciliation overwrites anything that bypasses the app. Upstream behaviour is
 unchanged for any contact whose workspace has no lifecycle_stage field.
 
 
+THE MODIFICATION (2026-10-29, part 10) - credential reissue for an existing workspace
+-------------------------------------------------------------------------------
+Added: `POST /api/v1/workspaces/{slug}/token`, guarded by the same X-Platform-Key
+shared secret as the provisioning route; and two fields (`owner_email`,
+`owner_changed`) on the session broker's response.
+
+Reason: the platform stores the plaintext of the workspace-pinned Sanctum token it
+is given at creation, and this application keeps only its SHA-256. So when the
+session broker adopts a workspace onto the tenant's own identity
+(`EnsureWorkspaceOwner`, the only writer of `workspaces.user_id`), the stored
+credential is left signing as an identity that neither owns nor belongs to that
+workspace, and SetApiWorkspaceContext answers 403 "You do not belong to this
+workspace." on every workspace-scoped route, permanently. There was no way to mint
+a replacement for a workspace that already existed, so the calling platform could
+not repair it either. Measured on the platform: 26 of 32 credentialed tenants held
+a token minted for the shared service user, i.e. each one died at its first
+adoption.
+
+The new route mints for the workspace's OWNER OF RECORD (never an identity the
+caller names) with the same abilities and the same workspace pin the provisioning
+route uses, and retires the workspace's earlier `platform:<slug>` tokens in the
+same call, minting first so a failed reissue cannot leave the caller
+credential-less.
+
+Files added:
+  app/Actions/Platform/IssueWorkspaceToken.php
+      the ONE mint implementation (owner abilities + workspace_id pin + retire of
+      the tokens it replaces); ProvisionWorkspace::mintWorkspaceToken now delegates
+      to it
+  app/Http/Controllers/Api/V1/WorkspaceTokenController.php
+      POST /api/v1/workspaces/{slug}/token
+  tests/Feature/Platform/WorkspaceTokenReissueTest.php
+
+Files changed:
+  app/Actions/Platform/ProvisionWorkspace.php      delegates the mint
+  app/Http/Controllers/Api/V1/WorkspaceSessionController.php
+      reports owner_email and owner_changed, so the caller that holds the plaintext
+      knows when the adoption moved ownership and its credential must be replaced
+  routes/api.php        registers POST /api/v1/workspaces/{slug}/token
+  tests/Feature/Platform/WorkspaceSessionBrokerTest.php
+
+Upstream behaviour is unchanged: no existing route, ability or pin changes, and a
+workspace created or adopted exactly as before still answers exactly as it did.
+
+
 DEPLOYED BUILDS — the source commit behind each image tag
 ---------------------------------------------------------
 Every image tag this section maps is a build of THIS repository. The commit named
@@ -568,7 +613,16 @@ the host, `3.6.3-logout-console-exit` and earlier, correspond to parts 1-6.)
       PlatformContactFieldSet, FieldOptionRows). This branch publishes exactly that
       earlier state; it is superseded and merged nowhere.
   :3.6.3-lifecycle-stage                 a1e8338fb  (`platform`)              2484 files, all identical
-      parts 7, 8 and 9. The tag the running containers use.
+      parts 7, 8 and 9. Superseded on 2026-10-29; kept on the host as the rollback.
+  :3.6.3-token-reissue                  c362f627d  (`platform`)              spot-checked, see below
+      parts 7, 8, 9 and 10. The tag the running containers use.
+      Deliberately NOT the full-tree hash the rows above carry: the platform card
+      that shipped this tag spot-checked the six files it touches (sha256 of each,
+      image vs commit, all identical) rather than sweeping all ~2485. The tree is a
+      `git archive` of c362f627d, so nothing outside that commit is in the build
+      context; the next full sweep should name this tag. The image's own copy of
+      this NOTICE is the pre-part-10 text, because part 10 was written after the
+      build (the same way the 2026-10-28 tag rows were corrected after theirs).
 
 Going from a running container to its source, without asking anyone:
 
