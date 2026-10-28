@@ -15,9 +15,12 @@ final readonly class FieldOptionRows
     /**
      * @param  array<int|string, string>  $names
      * @param  array<string, string>  $colors
+     * @param  int  $sortOffset  skip this many sort positions (used when topping up
+     *                           a select that already holds options, so a newly
+     *                           declared code lands AFTER the existing ones)
      * @return list<array<string, mixed>>
      */
-    public static function build(string $workspaceId, string $fieldId, string $fieldType, array $names, array $colors, CarbonImmutable $now): array
+    public static function build(string $workspaceId, string $fieldId, string $fieldType, array $names, array $colors, CarbonImmutable $now, int $sortOffset = 0): array
     {
         if ($names === []) {
             return [];
@@ -33,7 +36,7 @@ final readonly class FieldOptionRows
                 'custom_field_id' => $fieldId,
                 'tenant_id' => $workspaceId,
                 'name' => $name,
-                'sort_order' => $sortOrder,
+                'sort_order' => $sortOrder + $sortOffset,
                 'settings' => isset($colors[$name])
                     ? json_encode(new CustomFieldOptionSettingsData(color: $colors[$name]))
                     : null,

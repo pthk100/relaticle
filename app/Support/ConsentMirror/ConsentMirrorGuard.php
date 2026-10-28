@@ -7,9 +7,9 @@ namespace App\Support\ConsentMirror;
 use App\Enums\CustomFields\PeopleField;
 use App\Models\CustomFieldOption;
 use Closure;
-use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Collection;
 use Illuminate\Validation\ValidationException;
+use Relaticle\CustomFields\Models\CustomField;
 
 /**
  * THE READ-ONLY GUARD for the five consent mirror fields (t_a8dd1bae).
@@ -54,9 +54,9 @@ final class ConsentMirrorGuard
         return PeopleField::consentMirrorCodes();
     }
 
-    public static function isProtected(Model $field): bool
+    public static function isProtected(CustomField $field): bool
     {
-        return in_array((string) $field->getAttribute('code'), self::protectedCodes(), true);
+        return in_array((string) $field->code, self::protectedCodes(), true);
     }
 
     public static function isPlatformWrite(): bool
@@ -90,7 +90,7 @@ final class ConsentMirrorGuard
      *
      * @throws ValidationException on a real change
      */
-    public static function assertNotAHumanEdit(Model $field, mixed $incoming, mixed $current): void
+    public static function assertNotAHumanEdit(CustomField $field, mixed $incoming, mixed $current): void
     {
         if (! self::isProtected($field) || self::isPlatformWrite()) {
             return;
@@ -113,10 +113,10 @@ final class ConsentMirrorGuard
         }
 
         throw ValidationException::withMessages([
-            'custom_fields.'.$field->getAttribute('code') => sprintf(
+            'custom_fields.'.$field->code => sprintf(
                 '%s is written by the platform consent store and is read-only here. '
                 .'Change the contact\'s consent in the platform; the field will follow.',
-                (string) $field->getAttribute('name'),
+                (string) $field->name,
             ),
         ]);
     }
@@ -126,7 +126,7 @@ final class ConsentMirrorGuard
      * field's own options (id or label), so `{option-id}` and `{label}` compare
      * equal. Non-choice fields fall through to the raw comparison already made.
      */
-    private static function sameOptionValue(Model $field, mixed $incoming, mixed $current): bool
+    private static function sameOptionValue(CustomField $field, mixed $incoming, mixed $current): bool
     {
         if ($incoming === null || $current === null) {
             return false;
@@ -143,7 +143,7 @@ final class ConsentMirrorGuard
     }
 
     /** The option's name, given either its id or its name; null when it is neither. */
-    private static function optionName(Model $field, string $value): ?string
+    private static function optionName(CustomField $field, string $value): ?string
     {
         $option = CustomFieldOption::query()
             ->withoutGlobalScopes()

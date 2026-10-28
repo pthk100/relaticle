@@ -5,13 +5,13 @@ declare(strict_types=1);
 namespace App\Actions\Platform;
 
 use App\Models\CustomField;
-use App\Models\CustomFieldOption;
 use App\Models\People;
 use App\Models\Workspace;
 use App\Support\ConsentMirror\ConsentMirrorGuard;
 use App\Support\CurrentWorkspace;
 use App\Support\CustomFieldMerger;
 use Illuminate\Validation\ValidationException;
+use Relaticle\CustomFields\Models\CustomFieldOption;
 
 /**
  * THE PLATFORM'S WRITE into the consent mirror (t_a8dd1bae).

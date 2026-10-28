@@ -72,6 +72,51 @@ enum PeopleField: string
      */
     public const array MARKETING_OPTIN_VALUES = ['granted', 'declined', 'unknown', 'not_asked'];
 
+    /**
+     * Every code the reason select offers, in display order. The platform
+     * (`orchestrator/src/consent/reasons.ts`) writes these and nothing else.
+     */
+    public const array OPTOUT_REASON_VALUES = [
+        // the reason the person gave
+        'too_frequent',
+        'not_relevant',
+        'never_signed_up',
+        'competitor',
+        'no_longer_customer',
+        'privacy_concern',
+        // how the withdrawal arrived, when no reason was given
+        'unsubscribe_link',
+        'user_request',
+        'admin',
+        // delivery-triggered
+        'hard_bounce',
+        'complaint',
+        // the single fallback
+        'other',
+    ];
+
+    /**
+     * The five fields the platform's consent store PROJECTS onto the contact.
+     *
+     * A human must not be able to set them (see
+     * `App\Support\ConsentMirror\ConsentMirrorGuard`), because a CRM row saying
+     * `granted` for somebody who withdrew is the dangerous direction: the send
+     * gate reads the platform store, so the CRM copy would be a lie nothing
+     * corrects. Only the platform's own platform-key-guarded endpoint writes them.
+     *
+     * @return list<string>
+     */
+    public static function consentMirrorCodes(): array
+    {
+        return [
+            self::MARKETING_OPTIN->value,
+            self::DNC->value,
+            self::OPTOUT_REASON->value,
+            self::JURISDICTION->value,
+            self::LAWFUL_BASIS->value,
+        ];
+    }
+
     public function getFieldType(): string
     {
         return match ($this) {
@@ -135,6 +180,16 @@ enum PeopleField: string
             self::JURISDICTION, self::LAWFUL_BASIS => true,
             default => false,
         };
+    }
+
+    /**
+     * Is this field a consent MIRROR — written only by the platform, never by a
+     * human? Defined from `consentMirrorCodes()` so the read-only guard and the
+     * option list cannot drift apart.
+     */
+    public function isConsentMirror(): bool
+    {
+        return in_array($this->value, self::consentMirrorCodes(), true);
     }
 
     public function isListToggleableHidden(): bool
@@ -253,9 +308,16 @@ enum PeopleField: string
                 'LINE', 'WhatsApp', 'Web widget', 'Referral', 'Event', 'Ads', 'Import',
             ],
             self::MARKETING_OPTIN => self::MARKETING_OPTIN_VALUES,
-            self::OPTOUT_REASON => [
-                'user_request', 'unsubscribe_link', 'hard_bounce', 'complaint', 'admin', 'other',
-            ],
+            // Two bands: the REASON the person gave, then how the withdrawal
+            // arrived when they gave none (the mechanism is a fact even when the
+            // reason is not), then the delivery-triggered codes, then the ONE
+            // fallback.
+            //
+            // The platform writes exactly these codes (`consent/reasons.ts` in
+            // marketing-platform, pinned by `ConsentMirrorFieldSetTest`): anything
+            // it cannot recognise becomes `other` rather than a value this select
+            // does not offer.
+            self::OPTOUT_REASON => self::OPTOUT_REASON_VALUES,
             self::JURISDICTION => [
                 'HK PDPO', 'EU GDPR', 'UK GDPR', 'TH PDPA', 'SG PDPA', 'MY PDPA',
                 'ID PDPA', 'PH DPA', 'CN PIPL', 'BR LGPD', 'AU Privacy Act',
