@@ -5,6 +5,10 @@ declare(strict_types=1);
 use App\Actions\Jetstream\CreateWorkspace as CreateWorkspaceAction;
 use App\Actions\Onboarding\ApplyStagePreset;
 use App\Actions\Onboarding\SaveOnboardingUseCase;
+use App\Enums\CustomFields\CompanyField;
+use App\Enums\CustomFields\NoteField;
+use App\Enums\CustomFields\OpportunityField;
+use App\Enums\CustomFields\PeopleField;
 use App\Enums\CustomFields\TaskField;
 use App\Enums\OnboardingUseCase;
 use App\Features\OnboardSeed;
@@ -138,11 +142,11 @@ it('creates all custom fields for the first workspace', function (): void {
         ->get()
         ->groupBy('entity_type');
 
-    expect($fields->get('company'))->toHaveCount(3)
-        ->and($fields->get('people'))->toHaveCount(4)
-        ->and($fields->get('opportunity'))->toHaveCount(3)
-        ->and($fields->get('task'))->toHaveCount(4)
-        ->and($fields->get('note'))->toHaveCount(1);
+    expect($fields->get('company'))->toHaveCount(count(CompanyField::cases()))
+        ->and($fields->get('people'))->toHaveCount(count(PeopleField::cases()))
+        ->and($fields->get('opportunity'))->toHaveCount(count(OpportunityField::cases()))
+        ->and($fields->get('task'))->toHaveCount(count(TaskField::cases()))
+        ->and($fields->get('note'))->toHaveCount(count(NoteField::cases()));
 });
 
 it('seeds people linked to their correct companies for sales', function (): void {
@@ -395,7 +399,13 @@ it('seeds the default fields and their options in two queries', function (): voi
 it('writes nothing to the activity log when it seeds the default fields', function (): void {
     $workspace = Workspace::factory()->create(['personal_workspace' => false]);
 
-    expect(CustomField::withoutGlobalScopes()->where('tenant_id', $workspace->id)->count())->toBe(15)
+    $seeded = count(CompanyField::cases())
+        + count(PeopleField::cases())
+        + count(OpportunityField::cases())
+        + count(TaskField::cases())
+        + count(NoteField::cases());
+
+    expect(CustomField::withoutGlobalScopes()->where('tenant_id', $workspace->id)->count())->toBe($seeded)
         ->and(Activity::query()->whereIn('subject_type', [
             (new CustomField)->getMorphClass(),
             (new CustomFieldOption)->getMorphClass(),

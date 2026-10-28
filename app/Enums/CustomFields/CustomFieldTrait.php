@@ -127,6 +127,29 @@ trait CustomFieldTrait
     }
 
     /**
+     * Get whether this field is shown as a column in the entity's list table.
+     *
+     * @return bool True if the field is a list column
+     */
+    public function isVisibleInList(): bool
+    {
+        return true;
+    }
+
+    /**
+     * Get the position this field takes in the entity's form, view and list.
+     *
+     * Null keeps the historical behaviour for the enums that do not declare an
+     * order: the row is inserted without a sort_order and sorts last.
+     *
+     * @return int|null The sort order, or null for unordered
+     */
+    public function getSortOrder(): ?int
+    {
+        return null;
+    }
+
+    /**
      * Get whether this field value must be unique per entity type
      *
      * @return bool True if values must be unique across all records of this entity type

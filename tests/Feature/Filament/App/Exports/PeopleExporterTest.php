@@ -75,8 +75,30 @@ test('export columns include system-seeded custom fields', function () {
     $columns = PeopleExporter::getColumns();
     $columnLabels = collect($columns)->map(fn ($column) => $column->getLabel())->all();
 
-    foreach (PeopleField::cases() as $field) {
-        expect($columnLabels)->toContain($field->getDisplayName());
+    // The export follows the list surface: a seeded field becomes a column when
+    // it is visible_in_list, which the contact field set only sets for the
+    // columns anyone scans. The rest stay in the record view.
+    $listFields = array_filter(
+        PeopleField::cases(),
+        fn (PeopleField $field): bool => $field->isVisibleInList(),
+    );
+
+    expect($listFields)->not->toBeEmpty();
+
+    // Joined, because a date-time column carries a "(UTC)" suffix.
+    $labels = implode("\n", $columnLabels);
+
+    foreach ($listFields as $field) {
+        expect($labels)->toContain($field->getDisplayName());
+    }
+
+    $hidden = array_filter(
+        PeopleField::cases(),
+        fn (PeopleField $field): bool => ! $field->isVisibleInList(),
+    );
+
+    foreach ($hidden as $field) {
+        expect($labels)->not->toContain($field->getDisplayName());
     }
 });
 

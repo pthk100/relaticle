@@ -18,13 +18,19 @@ use App\Models\Opportunity;
 use App\Models\People;
 use App\Models\Task;
 use App\Models\Workspace;
-use App\Onboarding\FieldOptionRows;
-use Carbon\CarbonImmutable;
+use App\Onboarding\CustomFieldRow;
 use Illuminate\Support\Facades\DB;
-use Relaticle\CustomFields\Data\CustomFieldSettingsData;
 use Relaticle\CustomFields\Facades\Entities;
 use Relaticle\CustomFields\Services\Visibility\BackendVisibilityService;
 
+/**
+ * Seeds the default custom fields of every entity into a new workspace.
+ *
+ * This is why the platform contact field set is inherited "by construction":
+ * a workspace created through any path — the registration UI, demo:reset, or
+ * the platform provisioning API — gets PeopleField's codes here, not from a
+ * point-in-time migration.
+ */
 final readonly class CreateWorkspaceCustomFields
 {
     /** @var array<class-string, class-string> */
@@ -43,7 +49,7 @@ final readonly class CreateWorkspaceCustomFields
 
     private function seedDefaultFields(Workspace $workspace): void
     {
-        $now = now();
+        $now = now()->toImmutable();
         $fields = [];
         $options = [];
         $entityTypes = [];
@@ -53,17 +59,10 @@ final readonly class CreateWorkspaceCustomFields
             $entityTypes[] = $entityType;
 
             foreach ($enumClass::cases() as $enum) {
-                $field = $this->fieldRow($workspace, $entityType, $enum, $now);
-                $fields[] = $field;
+                $rows = CustomFieldRow::build((string) $workspace->getKey(), $entityType, $enum, $now);
+                $fields[] = $rows['field'];
 
-                array_push($options, ...FieldOptionRows::build(
-                    (string) $workspace->getKey(),
-                    $field['id'],
-                    (string) $field['type'],
-                    $enum->getOptions() ?? [],
-                    $enum->getOptionColors() ?? [],
-                    $now,
-                ));
+                array_push($options, ...$rows['options']);
             }
         }
 
@@ -77,39 +76,5 @@ final readonly class CreateWorkspaceCustomFields
         foreach ($entityTypes as $entityType) {
             BackendVisibilityService::clearCache($entityType);
         }
-    }
-
-    /**
-     * @return array<string, mixed>
-     */
-    private function fieldRow(
-        Workspace $workspace,
-        string $entityType,
-        CompanyCustomField|OpportunityCustomField|PeopleCustomField|TaskCustomField|NoteCustomField $enum,
-        CarbonImmutable $now,
-    ): array {
-        $field = new CustomField;
-
-        return $field->forceFill([
-            'id' => $field->newUniqueId(),
-            'tenant_id' => $workspace->getKey(),
-            'entity_type' => $entityType,
-            'code' => $enum->value,
-            'name' => $enum->getDisplayName(),
-            'type' => $enum->getFieldType(),
-            'lookup_type' => null,
-            'width' => $enum->getWidth(),
-            'active' => true,
-            'system_defined' => $enum->isSystemDefined(),
-            'settings' => new CustomFieldSettingsData(
-                list_toggleable_hidden: $enum->isListToggleableHidden(),
-                enable_option_colors: $enum->hasColorOptions(),
-                allow_multiple: $enum->allowsMultipleValues(),
-                max_values: $enum->getMaxValues(),
-                unique_per_entity_type: $enum->isUniquePerEntityType(),
-            ),
-            'created_at' => $now,
-            'updated_at' => $now,
-        ])->getAttributes();
     }
 }
