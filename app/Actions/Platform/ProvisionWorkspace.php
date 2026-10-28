@@ -5,11 +5,9 @@ declare(strict_types=1);
 namespace App\Actions\Platform;
 
 use App\Actions\Jetstream\CreateWorkspace;
-use App\Enums\WorkspaceCapability;
 use App\Models\User;
 use App\Models\Workspace;
 use Illuminate\Support\Facades\DB;
-use Laravel\Sanctum\NewAccessToken;
 use RuntimeException;
 
 /**
@@ -30,6 +28,7 @@ final readonly class ProvisionWorkspace
     public function __construct(
         private CreateWorkspace $createWorkspace,
         private ResolveTenantOwner $resolveTenantOwner,
+        private IssueWorkspaceToken $issueWorkspaceToken,
     ) {}
 
     /**
@@ -100,21 +99,14 @@ final readonly class ProvisionWorkspace
     }
 
     /**
-     * Mirrors App\Livewire\App\AccessTokens\CreateAccessToken: Sanctum's createToken() accepts
-     * no extra attributes, so workspace_id is filled in immediately after creation. A pinned
-     * workspace_id is what SetApiWorkspaceContext resolves on every later API call, which is
-     * why the token is minted here rather than left for the caller to manage.
+     * The token is minted by the shared implementation in `IssueWorkspaceToken`,
+     * so the create seam and the reissue seam
+     * (`POST /api/v1/workspaces/{slug}/token`) can never drift on abilities or on
+     * the workspace pin, the two things `SetApiWorkspaceContext` resolves every
+     * later call by.
      */
     private function mintWorkspaceToken(User $user, Workspace $workspace, ?string $tokenName): string
     {
-        $abilities = WorkspaceCapability::tokenPermissions(WorkspaceCapability::forOwner());
-
-        /** @var NewAccessToken $token */
-        $token = $user->createToken($tokenName ?? "platform:{$workspace->slug}", $abilities);
-
-        $token->accessToken->fill(['workspace_id' => $workspace->getKey()])->save();
-
-        // Sanctum returns "<id>|<plaintext>"; only the secret half is useful to a caller.
-        return explode('|', $token->plainTextToken, 2)[1];
+        return $this->issueWorkspaceToken->execute($user, $workspace, $tokenName)['token'];
     }
 }

@@ -134,3 +134,30 @@ it('creates the tenant owner as the workspace owner at provisioning time', funct
     expect($owner)->not->toBeNull()
         ->and(Workspace::query()->where('slug', 'solstice')->first()->user_id)->toBe($owner->getKey());
 });
+
+/*
+ * Whether the broker MOVED ownership (marketing-platform card t_659436f5).
+ *
+ * This is the signal the orchestrator needs: the credential it holds was minted
+ * for the PREVIOUS owner, and this adoption is the exact event that orphans it (the
+ * token is not moved, and the fork holds only its hash). Reporting the move lets the
+ * caller reissue in the same breath — POST /api/v1/workspaces/{slug}/token.
+ */
+it('reports whether the adoption actually moved ownership', function (): void {
+    $serviceUser = User::factory()->create(['email' => 'platform@relaticle.invalid']);
+    $workspace = Workspace::factory()->create(['slug' => 'solstice', 'user_id' => $serviceUser->id]);
+
+    $adopted = $this->withHeader('X-Platform-Key', 'test-platform-key')
+        ->postJson('/api/v1/workspaces/solstice/session', ['owner_email' => 'admin@solstice.tenant.test'])
+        ->assertOk();
+
+    expect($adopted->json('data.owner_changed'))->toBeTrue()
+        ->and($adopted->json('data.owner_email'))->toBe('admin@solstice.tenant.test');
+
+    // Already owned by that identity: nothing moved, so nothing has to be reissued.
+    $again = $this->withHeader('X-Platform-Key', 'test-platform-key')
+        ->postJson('/api/v1/workspaces/solstice/session', ['owner_email' => 'admin@solstice.tenant.test'])
+        ->assertOk();
+
+    expect($again->json('data.owner_changed'))->toBeFalse();
+});

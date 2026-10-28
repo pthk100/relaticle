@@ -54,6 +54,16 @@ final readonly class WorkspaceSessionController
         // before the tenant-scoped-owner rule landed: such a workspace is still
         // owned by the shared platform service user, and brokering it would put
         // every tenant into one session.
+        //
+        // Whether ownership actually MOVED is reported back, because that is the
+        // event that silently orphans a stored credential (t_659436f5): the token
+        // the calling platform holds was minted for the previous owner, and this
+        // move takes that identity's ownership away without touching the token.
+        // The caller needs to know so it can reissue (POST
+        // /api/v1/workspaces/{slug}/token): it is the only party holding the
+        // plaintext, so it is the only party that can replace it.
+        $previousOwnerId = $workspace->user_id;
+
         $owner = $this->ensureWorkspaceOwner->execute(
             $workspace,
             (string) $validated['owner_email'],
@@ -74,6 +84,8 @@ final readonly class WorkspaceSessionController
             'data' => [
                 'url' => parse_url(url('/auth/broker/'.$token), PHP_URL_PATH),
                 'expires_in' => self::TTL_MINUTES * 60,
+                'owner_email' => $owner->email,
+                'owner_changed' => $previousOwnerId !== $owner->getKey(),
             ],
         ]);
     }
