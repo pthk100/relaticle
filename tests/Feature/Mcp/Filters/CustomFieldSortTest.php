@@ -80,7 +80,7 @@ it('refuses a sort by a custom field that holds a list', function (string $field
     // list-of-value types (emails, phone_number, linkedin) stay unsortable.
     $allowed = 'name, created_at, updated_at, line_id, wechat_id, kakaotalk_id, '
         .'preferred_channel, job_title, department, seniority, country, preferred_language, '
-        .'timezone, lead_source, next_follow_up, account_owner, birthday, marketing_optin, '
+        .'timezone, lead_source, next_follow_up, account_owner, birthday, lifecycle_stage, marketing_optin, '
         .'dnc, optout_reason, jurisdiction, lawful_basis';
 
     RelaticleServer::actingAs($this->user)

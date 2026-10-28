@@ -101,7 +101,7 @@ test('marketing opt-in is a four-value select, never a toggle', function () {
         ->and(PeopleField::MARKETING_OPTIN_VALUES)->toBe($options);
 });
 
-test('the contact set adds only the three scanned fields to the list columns', function () {
+test('the contact set adds only the scanned fields to the list columns', function () {
     $workspace = Workspace::factory()->create();
 
     $alreadyInList = ['emails', 'phone_number', 'job_title', 'linkedin'];
@@ -116,7 +116,10 @@ test('the contact set adds only the three scanned fields to the list columns', f
 
     sort($addedToList);
 
-    expect($addedToList)->toBe(['dnc', 'next_follow_up', 'preferred_channel']);
+    // lifecycle_stage is the fourth: the derived lead/customer marker is the column
+    // that separates the address book from the pipeline, so it is scanned by default
+    // (t_7273de85).
+    expect($addedToList)->toBe(['dnc', 'lifecycle_stage', 'next_follow_up', 'preferred_channel']);
 });
 
 test('the field set carries the display order it declares', function () {
@@ -126,4 +129,63 @@ test('the field set carries the display order it declares', function () {
         expect(contactFields($workspace->getKey())[$case->value]->sort_order)
             ->toBe($case->getSortOrder());
     }
+});
+
+test('the withdrawal reason select offers the controlled vocabulary, not source strings', function () {
+    $workspace = Workspace::factory()->create();
+    $field = contactFields($workspace->getKey())['optout_reason'];
+
+    $options = CustomFieldOption::query()
+        ->withoutGlobalScopes()
+        ->where('custom_field_id', $field->getKey())
+        ->orderBy('sort_order')
+        ->pluck('name')
+        ->all();
+
+    // The platform writes these and nothing else (`consent/reasons.ts`).
+    expect($options)->toBe(PeopleField::OPTOUT_REASON_VALUES)
+        ->and($options)->toContain('too_frequent')
+        ->and($options)->toContain('privacy_concern')
+        ->and($options)->toContain('other');
+});
+
+test('a workspace seeded before the vocabulary grew is topped up, not duplicated', function () {
+    $workspace = Workspace::factory()->create();
+
+    // Rewind optout_reason to the six codes the first pass seeded.
+    $field = contactFields($workspace->getKey())['optout_reason'];
+    $legacy = ['user_request', 'unsubscribe_link', 'hard_bounce', 'complaint', 'admin', 'other'];
+
+    DB::table('custom_field_options')
+        ->where('custom_field_id', $field->getKey())
+        ->whereNotIn('name', $legacy)
+        ->delete();
+
+    $before = CustomFieldOption::query()
+        ->withoutGlobalScopes()
+        ->where('custom_field_id', $field->getKey())
+        ->count();
+
+    expect($before)->toBe(count($legacy));
+
+    // Applying the set writes zero FIELD rows — only options are missing.
+    expect(PlatformContactFieldSet::applyTo($workspace->getKey()))->toBe(0);
+
+    $after = CustomFieldOption::query()
+        ->withoutGlobalScopes()
+        ->where('custom_field_id', $field->getKey())
+        ->orderBy('sort_order')
+        ->pluck('name')
+        ->all();
+
+    expect($after)->toHaveCount(count(PeopleField::OPTOUT_REASON_VALUES))
+        // the existing six are kept, not recreated
+        ->and(array_values(array_intersect($after, $legacy)))->toHaveCount(count($legacy))
+        ->and($after)->toContain('too_frequent');
+
+    // Idempotent: a second run adds nothing.
+    $countBefore = count($after);
+    PlatformContactFieldSet::applyTo($workspace->getKey());
+    expect(CustomFieldOption::query()->withoutGlobalScopes()->where('custom_field_id', $field->getKey())->count())
+        ->toBe($countBefore);
 });

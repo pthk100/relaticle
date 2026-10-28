@@ -944,7 +944,7 @@ it('rejects a field a record does not publish', function (): void {
 it('refuses a sort by a custom field that holds a list instead of failing', function (): void {
     $allowed = 'name, created_at, updated_at, line_id, wechat_id, kakaotalk_id, '
         .'preferred_channel, job_title, department, seniority, country, preferred_language, '
-        .'timezone, lead_source, next_follow_up, account_owner, birthday, marketing_optin, '
+        .'timezone, lead_source, next_follow_up, account_owner, birthday, lifecycle_stage, marketing_optin, '
         .'dnc, optout_reason, jurisdiction, lawful_basis';
 
     $this->getJson('/api/v1/people?sort=emails')

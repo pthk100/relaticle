@@ -161,5 +161,63 @@ final readonly class PlatformContactFieldSet
                 ->where('code', $row->code)
                 ->update($changes);
         }
+
+        self::convergeOptions($tenantId, $entityType);
+    }
+
+    /**
+     * Top up the OPTIONS of an already-seeded select (t_a8dd1bae).
+     *
+     * A code list can change after a workspace has been seeded — the withdrawal
+     * reasons gained six reason codes that a tenant who signed up yesterday does
+     * not have, and without this the platform's write would be refused by the CRM
+     * for a value the select does not offer. Missing options are INSERTED; nothing
+     * is ever deleted or renamed, so a tenant's own curation of the fields it is
+     * allowed to curate survives, and a second run writes nothing.
+     */
+    private static function convergeOptions(string $tenantId, string $entityType): void
+    {
+        $fields = DB::table('custom_fields')
+            ->where('tenant_id', $tenantId)
+            ->where('entity_type', $entityType)
+            ->whereIn('code', self::codes())
+            ->get(['id', 'code', 'type']);
+
+        foreach ($fields as $field) {
+            $declared = PeopleField::from((string) $field->code)->getOptions() ?? [];
+
+            if ($declared === []) {
+                continue;
+            }
+
+            $existing = DB::table('custom_field_options')
+                ->where('custom_field_id', $field->id)
+                ->pluck('name')
+                ->all();
+
+            $missing = array_values(array_filter(
+                $declared,
+                static fn (string $name): bool => ! in_array($name, $existing, true),
+            ));
+
+            if ($missing === []) {
+                continue;
+            }
+
+            // appends AFTER the options the workspace already shows
+            $rows = FieldOptionRows::build(
+                $tenantId,
+                (string) $field->id,
+                (string) $field->type,
+                $missing,
+                [],
+                CarbonImmutable::now(),
+                count($existing),
+            );
+
+            if ($rows !== []) {
+                CustomFieldOption::query()->insert($rows);
+            }
+        }
     }
 }

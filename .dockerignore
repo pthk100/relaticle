@@ -70,3 +70,6 @@ yarn-debug.log*
 yarn-error.log*
 .DS_Store
 Thumbs.db
+
+# Runtime artefacts the test runner writes into a mounted tree (root-owned)
+/storage/framework/testing

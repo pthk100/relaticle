@@ -282,6 +282,20 @@ return Application::configure(basePath: dirname(__DIR__))
             ->withoutOverlapping()
             ->onOneServer();
         $schedule->command('app:purge-scheduled-deletions')->daily()->withoutOverlapping()->onOneServer();
+        // The derived `lifecycle_stage` (t_7273de85). The observers write it on every
+        // stage move, so this is the CORRECTIVE pass, not the primary writer: the
+        // five-minute tick re-reads contacts whose opportunities or stage values moved
+        // since its cursor (ten-minute overlap), and the nightly sweep ignores the
+        // cursor entirely to catch what a cursor cannot see (a hard delete, a value row
+        // written straight into Postgres, a contact that predates the field).
+        $schedule->command('platform:reconcile-lifecycle-stages')
+            ->everyFiveMinutes()
+            ->withoutOverlapping()
+            ->onOneServer();
+        $schedule->command('platform:reconcile-lifecycle-stages --full')
+            ->dailyAt('03:40')
+            ->withoutOverlapping()
+            ->onOneServer();
         $schedule->command('notifications:send-task-digest')->hourly()->withoutOverlapping()->onOneServer();
         $schedule->command('notifications:send-setup-nudge')->hourly()->withoutOverlapping()->onOneServer();
 
