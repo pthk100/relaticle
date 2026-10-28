@@ -28,14 +28,14 @@ use App\Onboarding\PlatformFieldOptions;
  *
  * The consent mirrors are a read-only projection of the platform's consent
  * store: t_a8dd1bae writes them, humans do not. marketing_optin is deliberately
- * a select with four values and never a toggle — "not_asked" must not be
+ * a select with four values and never a toggle: "not_asked" must not be
  * readable as "granted", and a boolean collapses exactly that distinction.
  */
 enum PeopleField: string
 {
     use CustomFieldTrait;
 
-    // Band 1 — identity and channel handles.
+    // Band 1: identity and channel handles.
     case EMAILS = 'emails';
     case PHONE_NUMBER = 'phone_number';
     case WHATSAPP_NUMBER = 'whatsapp_number';
@@ -46,7 +46,7 @@ enum PeopleField: string
     case JOB_TITLE = 'job_title';
     case LINKEDIN = 'linkedin';
 
-    // Band 2 — profile.
+    // Band 2: profile.
     case DEPARTMENT = 'department';
     case SENIORITY = 'seniority';
     case COUNTRY = 'country';
@@ -59,7 +59,7 @@ enum PeopleField: string
     case ACCOUNT_OWNER = 'account_owner';
     case BIRTHDAY = 'birthday';
 
-    // Band 3 — consent mirrors.
+    // Band 3: consent mirrors.
     case MARKETING_OPTIN = 'marketing_optin';
     case DNC = 'dnc';
     case OPTOUT_REASON = 'optout_reason';
@@ -213,7 +213,7 @@ enum PeopleField: string
 
     /**
      * The upsert ladder is one identity field per data type: emails (email)
-     * and phone_number (phone). whatsapp_number is explicitly NOT unique —
+     * and phone_number (phone). whatsapp_number is explicitly NOT unique:
      * "we conversed on WhatsApp from this number" is not "this person's
      * identity is this number".
      */
@@ -272,7 +272,7 @@ enum PeopleField: string
     public function getDescription(): ?string
     {
         return match ($this) {
-            self::PHONE_NUMBER => 'Mobile number. Unique per workspace — a legal upsert match field.',
+            self::PHONE_NUMBER => 'Mobile number. Unique per workspace, so it is a legal upsert match field.',
             self::WHATSAPP_NUMBER => 'The number this contact messaged us from on WhatsApp. Not an identity key; never unique.',
             self::LINE_ID => 'The contact\'s LINE user id, as received from the messaging channel.',
             self::WECHAT_ID => 'The contact\'s WeChat id.',
@@ -280,14 +280,14 @@ enum PeopleField: string
             self::PREFERRED_CHANNEL => 'The channel the contact prefers to be reached on.',
             self::COUNTRY => 'ISO 3166-1 alpha-2, stored as "Name (CC)".',
             self::PREFERRED_LANGUAGE => 'BCP-47 language tag, e.g. en, zh-Hant, th.',
-            self::TIMEZONE => 'IANA zone identifier ("Asia/Hong_Kong"). GMT is the explicit unknown — never a guess at a zone.',
+            self::TIMEZONE => 'IANA zone identifier ("Asia/Hong_Kong"). GMT is the explicit unknown, never a guess at a zone.',
             self::LEAD_SOURCE => 'How this contact first reached us.',
             self::PRODUCTS_INTEREST => 'Product lines this contact is interested in. Options are workspace-curated.',
             self::SEGMENTS => 'Free-form segmentation tags for this contact.',
             self::NEXT_FOLLOW_UP => 'When a human owes this contact the next reply.',
             self::ACCOUNT_OWNER => 'The teammate who owns this account, by name or email. Text, not a record relation: the record field type can only target CRM entities in this build, not users.',
             self::BIRTHDAY => 'Date of birth. Optional; do not infer it.',
-            self::MARKETING_OPTIN => 'Mirror of the platform consent store. Four values — granted, declined, unknown, not_asked. Not asked is NOT declined and NOT granted.',
+            self::MARKETING_OPTIN => 'Mirror of the platform consent store. Four values: granted, declined, unknown, not_asked. Not asked is NOT declined and NOT granted.',
             self::DNC => 'Do-not-contact flag from the platform consent store. When set, no outbound message may be sent.',
             self::OPTOUT_REASON => 'Why the contact opted out, from the platform consent store.',
             self::JURISDICTION => 'The privacy regime that governs this contact, from the platform consent store.',

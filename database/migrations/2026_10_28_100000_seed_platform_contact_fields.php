@@ -17,6 +17,12 @@ use Illuminate\Support\Facades\Log;
  * zero rows and writes zero settings.
  *
  * Safe to run on an empty database (a fresh install has no workspaces yet).
+ *
+ * Forward only, like every migration here. The fields are the platform contract
+ * (tenancy, the consent mirrors and the upsert match ladder all name these
+ * codes), so a rollback would not be allowed to delete them anyway: a workspace
+ * that lost marketing_optin would silently stop mirroring consent. Removing a
+ * code from the set is a product decision, made by editing PeopleField.
  */
 return new class extends Migration
 {
@@ -26,13 +32,4 @@ return new class extends Migration
 
         Log::info('Seeded the platform contact field set.', $result);
     }
-
-    /**
-     * Data-only backfill. The fields are the platform contract — tenancy, the
-     * consent mirrors and the upsert match ladder all name these codes — so
-     * rolling back the migration does not delete them: a workspace that lost
-     * marketing_optin would silently stop mirroring consent. Removing a code
-     * from the set is a product decision, made by editing PeopleField.
-     */
-    public function down(): void {}
 };

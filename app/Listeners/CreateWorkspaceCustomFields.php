@@ -27,8 +27,8 @@ use Relaticle\CustomFields\Services\Visibility\BackendVisibilityService;
  * Seeds the default custom fields of every entity into a new workspace.
  *
  * This is why the platform contact field set is inherited "by construction":
- * a workspace created through any path — the registration UI, demo:reset, or
- * the platform provisioning API — gets PeopleField's codes here, not from a
+ * a workspace created through any path (the registration UI, demo:reset, or
+ * the platform provisioning API) gets PeopleField's codes here, not from a
  * point-in-time migration.
  */
 final readonly class CreateWorkspaceCustomFields

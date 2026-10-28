@@ -47,7 +47,7 @@ final readonly class PlatformContactFieldSet
     /**
      * Seed any missing contact field into one workspace.
      *
-     * @return int Rows created — 0 when the workspace already has the set.
+     * @return int Rows created; 0 when the workspace already has the set.
      */
     public static function applyTo(string $tenantId): int
     {

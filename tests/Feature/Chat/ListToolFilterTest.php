@@ -283,7 +283,15 @@ it('offers only the custom fields a list can be sorted by', function (): void {
 
     $sort = (new ListPeopleTool)->schema(new JsonSchemaTypeFactory)['sort']->toArray()['description'];
 
-    expect($sort)->toStartWith('Sort by one of: name, created_at, updated_at, job_title.');
+    // The sort surface is the sortable custom fields of the workspace, in the
+    // order the field set declares. emails/phone_number/linkedin (list-of-value
+    // types) and products_interest/segments (multi-value) are not sortable.
+    expect($sort)->toStartWith(
+        'Sort by one of: name, created_at, updated_at, line_id, wechat_id, '
+        .'kakaotalk_id, preferred_channel, job_title, department, seniority, country, '
+        .'preferred_language, timezone, lead_source, next_follow_up, account_owner, '
+        .'birthday, marketing_optin, dnc, optout_reason, jurisdiction, lawful_basis.',
+    );
 });
 
 it('reports an unknown sort column instead of failing silently', function (): void {
