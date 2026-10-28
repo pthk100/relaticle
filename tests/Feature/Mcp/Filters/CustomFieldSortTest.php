@@ -76,7 +76,14 @@ it('sorts by a custom field created after an earlier sort', function (): void {
 });
 
 it('refuses a sort by a custom field that holds a list', function (string $field): void {
+    // The allowed list is the field set's sortable codes, in declared order; the
+    // list-of-value types (emails, phone_number, linkedin) stay unsortable.
+    $allowed = 'name, created_at, updated_at, line_id, wechat_id, kakaotalk_id, '
+        .'preferred_channel, job_title, department, seniority, country, preferred_language, '
+        .'timezone, lead_source, next_follow_up, account_owner, birthday, marketing_optin, '
+        .'dnc, optout_reason, jurisdiction, lawful_basis';
+
     RelaticleServer::actingAs($this->user)
         ->tool(ListPeopleTool::class, ['sort' => ['field' => $field]])
-        ->assertHasErrors(["Requested sort(s) `{$field}` is not allowed. Allowed sort(s) are `name, created_at, updated_at, job_title`."]);
+        ->assertHasErrors(["Requested sort(s) `{$field}` is not allowed. Allowed sort(s) are `{$allowed}`."]);
 })->with(['emails', 'phone_number', 'linkedin']);

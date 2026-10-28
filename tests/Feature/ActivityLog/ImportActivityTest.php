@@ -38,7 +38,7 @@ afterEach(function (): void {
 });
 
 it('logs a custom field an import update changed, with its old and new value', function (): void {
-    $cf = ImportExecutionFixture::customField($this, 'lead_source', 'text');
+    $cf = ImportExecutionFixture::customField($this, 'source_detail', 'text');
     $person = People::factory()->create(['name' => 'John', 'workspace_id' => $this->workspace->getKey()]);
 
     CustomFieldValue::query()->forceCreate([
@@ -68,7 +68,7 @@ it('logs a custom field an import update changed, with its old and new value', f
     $activity = Activity::query()->withoutGlobalScopes()->where('event', 'custom_field_changes')->firstOrFail();
     $change = $activity->properties['custom_field_changes'][0];
 
-    expect($change['code'])->toBe('lead_source')
+    expect($change['code'])->toBe('source_detail')
         ->and($change['old']['label'])->toBe('old value')
         ->and($change['new']['label'])->toBe('new value')
         ->and($activity->subject_id)->toBe($person->getKey())
@@ -102,7 +102,7 @@ it('logs an import update that sets a toggle with no prior value to false', func
 });
 
 it('does not log an import update that leaves a custom field as it was', function (): void {
-    $cf = ImportExecutionFixture::customField($this, 'lead_source', 'text');
+    $cf = ImportExecutionFixture::customField($this, 'source_detail', 'text');
     $person = People::factory()->create(['name' => 'John', 'workspace_id' => $this->workspace->getKey()]);
 
     CustomFieldValue::query()->forceCreate([
@@ -131,7 +131,7 @@ it('does not log an import update that leaves a custom field as it was', functio
 });
 
 it('does not log custom field values on import creates', function (): void {
-    $cf = ImportExecutionFixture::customField($this, 'lead_source', 'text');
+    $cf = ImportExecutionFixture::customField($this, 'source_detail', 'text');
     Activity::query()->withoutGlobalScopes()->delete();
 
     ImportExecutionFixture::readyStore($this, ['Name', 'Source'], [
@@ -150,7 +150,7 @@ it('does not log custom field values on import creates', function (): void {
 });
 
 it('logs an import update on a record that already holds several custom field values', function (): void {
-    $source = ImportExecutionFixture::customField($this, 'lead_source', 'text');
+    $source = ImportExecutionFixture::customField($this, 'source_detail', 'text');
     $region = ImportExecutionFixture::customField($this, 'region', 'text');
     $person = People::factory()->create(['name' => 'John', 'workspace_id' => $this->workspace->getKey()]);
 
@@ -184,7 +184,7 @@ it('logs an import update on a record that already holds several custom field va
 });
 
 it('logs nothing extra when a later row of the same import lands on a record it just created', function (): void {
-    $cf = ImportExecutionFixture::customField($this, 'lead_source', 'text');
+    $cf = ImportExecutionFixture::customField($this, 'source_detail', 'text');
     Activity::query()->withoutGlobalScopes()->delete();
 
     ImportExecutionFixture::readyStore($this, ['Name', 'Email', 'Source'], [

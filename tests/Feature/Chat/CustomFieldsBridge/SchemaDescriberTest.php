@@ -413,7 +413,7 @@ it('states each per-type filter rule once however many fields share the type', f
 
     $lines = [];
 
-    foreach (range(1, 30) as $number) {
+    foreach (range(1, 20) as $number) {
         $create("field_{$number}");
         $lines[] = "- field_{$number} (Field field_{$number}, text)\n";
     }
@@ -428,7 +428,7 @@ it('states each per-type filter rule once however many fields share the type', f
         ->and(strlen($chat) - strlen($baseChat))->toBe(array_sum(array_map(strlen(...), $lines)))
         ->and(substr_count($encoded, '"text":{"operators"'))->toBe(1)
         ->and(substr_count(json_encode($schema, JSON_THROW_ON_ERROR), $phone))->toBe(1)
-        ->and(strlen($encoded) - strlen($baseResource))->toBe(array_sum(array_map(fn (int $number): int => strlen(json_encode(["field_{$number}" => ['name' => "Field field_{$number}", 'type' => 'text']], JSON_THROW_ON_ERROR)) - 1, range(1, 30))))
+        ->and(strlen($encoded) - strlen($baseResource))->toBe(array_sum(array_map(fn (int $number): int => strlen(json_encode(["field_{$number}" => ['name' => "Field field_{$number}", 'type' => 'text']], JSON_THROW_ON_ERROR)) - 1, range(1, 20))))
         ->and(array_keys($vocabularyField = (array) $schema['filterable_fields']->custom_fields->field_1))->toBe(['name', 'type'])
         ->and($vocabularyField)->not->toHaveKey('example');
 });

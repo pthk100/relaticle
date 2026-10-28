@@ -942,9 +942,14 @@ it('rejects a field a record does not publish', function (): void {
 });
 
 it('refuses a sort by a custom field that holds a list instead of failing', function (): void {
+    $allowed = 'name, created_at, updated_at, line_id, wechat_id, kakaotalk_id, '
+        .'preferred_channel, job_title, department, seniority, country, preferred_language, '
+        .'timezone, lead_source, next_follow_up, account_owner, birthday, marketing_optin, '
+        .'dnc, optout_reason, jurisdiction, lawful_basis';
+
     $this->getJson('/api/v1/people?sort=emails')
         ->assertBadRequest()
-        ->assertJsonPath('message', 'Requested sort(s) `emails` is not allowed. Allowed sort(s) are `name, created_at, updated_at, job_title`.');
+        ->assertJsonPath('message', "Requested sort(s) `emails` is not allowed. Allowed sort(s) are `{$allowed}`.");
 });
 
 it('pages with a cursor under a filter and a native sort', function (): void {
