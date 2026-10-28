@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use App\Http\Controllers\Api\V1\CompaniesController;
 use App\Http\Controllers\Api\V1\CompaniesUpsertController;
+use App\Http\Controllers\Api\V1\ConsentMirrorController;
 use App\Http\Controllers\Api\V1\CustomFieldsController;
 use App\Http\Controllers\Api\V1\NotesController;
 use App\Http\Controllers\Api\V1\OpportunitiesController;
@@ -46,6 +47,12 @@ Route::prefix('v1')
         // login (t_5df176cd). Same shared-secret guard, for the same reason — no
         // workspace-pinned token can exist for a session being established.
         Route::post('workspaces/{slug}/session', WorkspaceSessionController::class)->name('platform.workspaces.session');
+        // The consent mirror's write path (t_a8dd1bae). The five mirror fields on
+        // a contact are read-only for every tenant-authenticated caller, so the
+        // orchestrator's projection needs this platform-guarded door: it states the
+        // workspace and the person, and only the five codes are writable through it.
+        Route::post('platform/consent-mirror', ConsentMirrorController::class)
+            ->name('platform.consent-mirror.store');
         // Teardown counterpart — the orchestrator's cancel path deletes the tenant
         // by slug over the same platform-guarded group (a workspace-pinned token
         // cannot exist for a workspace being removed).
