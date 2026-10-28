@@ -359,3 +359,220 @@ NO UPSTREAM LOGIC WAS ALTERED. The control is a render hook in this deployment's
 own panel provider plus new files; it is emitted only when PLATFORM_CONSOLE_URL is
 configured, so a stock self-host install renders exactly what it rendered before.
 No route, controller, layout or vendor view is patched.
+
+
+THE MODIFICATION (2026-10-28, part 7) — the platform contact field set
+----------------------------------------------------------------------
+Added: a fixed contact schema every workspace is seeded with — 25 codes in three
+bands (identity and channel handles, profile, and the five consent mirrors), the
+one place that builds its field and option rows, and a backfill for the
+workspaces that predate a code.
+
+Reason: upstream lets a workspace author its own custom fields through Filament
+and starts every workspace with only the four built-in contact columns, so no
+schema is guaranteed to exist twice. An orchestrator writing contacts for many
+tenants would have to discover each workspace's fields before it could write
+one. This field set is the contract instead: the same codes, types and options in
+every workspace, seeded on creation and backfilled into the ones already there.
+
+Files added:
+  app/Onboarding/PlatformContactFieldSet.php
+      declares the codes and seeds or converges one workspace's rows; idempotent,
+      so a second run writes nothing and a tenant's own curation of the fields it
+      may curate survives
+  app/Onboarding/CustomFieldRow.php
+      the ONE builder of a field row, so the creation listener and the backfill
+      cannot drift
+  app/Onboarding/PlatformFieldOptions.php
+      the 251-entry ISO 3166-1 country list and the IANA + GMT timezone list,
+      chosen once and restated in each field's description
+  app/Console/Commands/SeedPlatformContactFieldsCommand.php
+  database/migrations/2026_10_28_100000_seed_platform_contact_fields.php
+      backfills the workspaces that predate a code; forward-only, like every
+      migration in this fork, because a rollback must not delete rows a
+      workspace's consent mirror depends on
+  tests/Feature/Onboarding/PlatformContactFieldSetTest.php
+
+Files modified:
+  app/Enums/CustomFields/PeopleField.php   the 25 codes, their types and options
+  app/Enums/CustomFields/CustomFieldTrait.php
+  app/Listeners/CreateWorkspaceCustomFields.php
+      a new workspace is seeded from the same enum, not from a second list
+  tests/Feature/Onboarding/CreateWorkspaceSeedTest.php
+  tests/Feature/Filament/App/Exports/PeopleExporterTest.php
+  tests/Feature/Chat/ListToolFilterTest.php
+  tests/Feature/ActivityLog/ImportActivityTest.php
+  tests/Feature/Api/V1/ListFilterTest.php
+  tests/Feature/Api/V1/PeopleUpsertApiTest.php
+  tests/Feature/Chat/CustomFieldsBridge/SchemaDescriberTest.php
+  tests/Feature/Mcp/Filters/CustomFieldSortTest.php
+      the surfaces that asserted the four-field contact now assert the field set:
+      the allowed-sort message, `match.field` accepting phone_number, the
+      unique-per-entity-type phone rule, and the seeded fields' share of the
+      chat-created per-entity budget
+
+Choices a reader cannot infer from the diff alone:
+  - phone_number is unique_per_entity_type, which is what makes phone a legal
+    /people/upsert match.field; whatsapp_number stays non-unique on purpose.
+  - marketing_optin is a four-value select and never a toggle: "not_asked" must
+    not be readable as "granted" at the CRM boundary.
+  - account_owner is text, not a record relation: the record field type can only
+    target registered custom-field entities (people/company/note/task) in this
+    build, not users.
+  - Sections are not used. SYSTEM_SECTIONS is disabled in
+    config/custom-fields.php, and enabling it would hide every field without a
+    custom_field_section_id, so the set relies on a declared sort_order band.
+
+
+THE MODIFICATION (2026-10-28, part 8) — the read-only consent mirror
+-------------------------------------------------------------------
+Added: five contact fields that are a projection of the platform's consent store
+(marketing_optin, dnc, optout_reason, jurisdiction, lawful_basis), a guard that
+refuses a tenant-authenticated write to any of them, the platform-only door the
+orchestrator's drain writes through, and the controlled withdrawal-reason
+vocabulary on optout_reason.
+
+Reason: the platform owns consent. A CRM form, an import, an MCP tool or a
+scripted API call that can set `marketing_optin: granted` for somebody who
+withdrew is exactly the failure consent tracking exists to prevent, and one
+writable copy of the truth is the only way to avoid it. The mirror is therefore
+read-only for every tenant-authenticated caller and writable only through
+POST /api/v1/platform/consent-mirror, which sits in the platform-key group (the
+same shared-secret guard as workspace provisioning).
+
+Files added:
+  app/Support/ConsentMirror/ConsentMirrorGuard.php
+      the protected-code list, the refusal (422 naming the field), and
+      runAsPlatform() — the one way to write the five codes
+  app/Actions/Platform/WriteConsentMirror.php
+      the drain's write: states the workspace and the person, writes only the
+      five codes
+  app/Http/Controllers/Api/V1/ConsentMirrorController.php
+  database/migrations/2026_10_28_140000_top_up_consent_select_options.php
+      inserts the reason codes a workspace is missing into every existing
+      workspace (the select offers twelve; the platform's reasons.ts writes those
+      and nothing else)
+  tests/Feature/Consent/ConsentMirrorEndpointTest.php
+  tests/Feature/Consent/ConsentMirrorReadOnlyTest.php
+
+Files modified:
+  app/Models/People.php
+      saveCustomFieldValue() is the funnel the web form, the REST API, the MCP
+      tools and the importers all pass through, so the invariant lives there. A
+      null is NOT an edit (saveCustomFields writes null for every code the
+      payload omits), so ordinary contact edits keep working; a DIFFERENT value
+      is refused. saveCustomFields() also clears the trait's static payload on a
+      refusal: spl_object_id is reused, and a payload left behind would be
+      applied to the next model to land on that id inside the same worker.
+  app/Onboarding/PlatformContactFieldSet.php
+      convergeOptions() tops up a select's options for workspaces already seeded;
+      it inserts missing options and never deletes or renames one
+  app/Onboarding/FieldOptionRows.php
+      build() gained a $sortOffset, so a topped-up code lands after the options
+      the tenant already shows
+  app/Enums/CustomFields/PeopleField.php
+      the withdrawal-reason vocabulary on optout_reason
+  routes/api.php        registers POST /api/v1/platform/consent-mirror
+  tests/Feature/Onboarding/PlatformContactFieldSetTest.php
+
+Upstream behaviour with the mirror codes absent is unchanged; with them present,
+a tenant-authenticated write to those five codes answers 422 instead of writing.
+
+
+THE MODIFICATION (2026-10-28, part 9) — `lifecycle_stage`, and `lead_source` as an origin
+------------------------------------------------------------------------------------------
+Added: `lifecycle_stage`, a DERIVED people select (lead / opportunity / customer /
+lost) folded over a contact's opportunities, its writers and its corrective
+schedule; a read-only guard on it; and `lead_source` rewritten to record where a
+contact came from rather than which channel it arrived on.
+
+Reason: the pipeline already knew the answer (the deals), and every surface that
+needed "where is this person in the funnel" was re-deriving it from the
+opportunity table with its own rule. The fold exists in exactly one class here
+(App\Support\LifecycleStage\LifecycleStage) and both writers call it, so the CRM
+board, the API and the platform's attribution read the same answer. `lead_source`
+had been carrying channel names (LINE, WhatsApp, Web widget), which duplicated
+`preferred_channel` and could not answer the question its name asks.
+
+Files added:
+  app/Support/LifecycleStage/LifecycleStage.php
+      the ONE precedence rule (any Closed Won -> customer, else any open deal ->
+      opportunity, else only lost -> lost, else no deal at all -> lead) and
+      nothing else
+  app/Support/LifecycleStage/LifecycleStageProjection.php
+      the re-entrancy scope: the projection writes a custom field value, which
+      fires the observer that triggers the projection
+  app/Support/LifecycleStage/LifecycleStageProjector.php
+  app/Support/LifecycleStage/LifecycleStageReconciler.php
+  app/Support/LifecycleStage/LifecycleStageGuard.php
+      the refusal (422) for a tenant-authenticated write, whose message names the
+      remedy the consent mirrors' does not: move the deal
+  app/Console/Commands/ReconcileLifecycleStagesCommand.php
+  database/migrations/2026_10_28_170000_lifecycle_stage_and_lead_source_taxonomy.php
+      re-points the stored lead_source values and refuses to delete an option
+      that is still in use
+  tests/Feature/LifecycleStage/LifecycleStageTest.php
+
+Files modified:
+  app/Observers/CustomFieldValueObserver.php
+      a stage move inside the CRM is a custom_field_values write and never fires
+      the Opportunity observer, so the contact is recomputed on the opportunity
+      `stage` field — the path a human's drag takes
+  app/Observers/OpportunityObserver.php
+  app/Observers/PeopleObserver.php
+      a new contact is `lead` from birth, so the field is never empty between two
+      ticks
+  app/Models/People.php
+      the read-only guard, in the same funnel as the consent mirrors and with its
+      own refusal message
+  app/Enums/CustomFields/PeopleField.php
+      lifecycle_stage at the END of the profile band (a derived code must not sit
+      among the authored ones) and the eight lead_source origins
+  app/Onboarding/PlatformContactFieldSet.php
+  bootstrap/app.php      the corrective pass: platform:reconcile-lifecycle-stages
+                        every five minutes (a ten-minute cursor overlap) and
+                        --full nightly at 03:40, both withoutOverlapping() and
+                        onOneServer(). The observers are the primary writer; this
+                        exists to catch what a cursor cannot see (a hard delete, a
+                        row written straight into Postgres, a contact that
+                        predates the field)
+  tests/Feature/Api/V1/ListFilterTest.php
+  tests/Feature/Mcp/Filters/CustomFieldSortTest.php
+  tests/Feature/Onboarding/PlatformContactFieldSetTest.php
+
+A tenant-authenticated write to lifecycle_stage is refused with a 422, and the
+reconciliation overwrites anything that bypasses the app. Upstream behaviour is
+unchanged for any contact whose workspace has no lifecycle_stage field.
+
+
+DEPLOYED BUILDS — the source commit behind each image tag
+---------------------------------------------------------
+Every Relaticle image this section maps was built from THIS repository, at the
+commit in the table below, on branch `platform`. Nothing deployed contains tree
+state that is not in these commits. (The older tags still on the host —
+`3.6.3-logout-console-exit` and earlier — correspond to parts 1-6 of this file.)
+
+  image tag                                                  commit
+  ghcr.io/pthk100/relaticle-platform:3.6.3-contact-fields    9c6eea84c
+      part 7
+  ghcr.io/pthk100/relaticle-platform:3.6.3-consent-mirror    110b31241
+      parts 7 and 8
+  ghcr.io/pthk100/relaticle-platform:3.6.3-lifecycle-stage   a1e8338fb
+      parts 7, 8 and 9
+
+Going from a running container to its source, without asking anyone:
+
+  $ docker inspect marketing-platform-relaticle-1 --format '{{.Config.Image}}'
+  ghcr.io/pthk100/relaticle-platform:3.6.3-lifecycle-stage
+  $ git clone https://github.com/pthk100/relaticle.git
+  $ git -C relaticle show a1e8338fb --stat
+  $ git -C relaticle checkout a1e8338fb && docker build -t relaticle-local .
+
+The tags are HOST-LOCAL: each was built with `docker build` on the dev host and
+has never been pushed, because no registry credential for `pthk100` exists on that
+host or on the build workstation (`docker push` answers "unauthorized"). The image
+tag is therefore a name for a local image id, not a published artefact, and this
+repository at the commit above is the whole of the §13 source offer for it. The
+image's own contents are the tree at that commit; the Dockerfile in it rebuilds the
+same application.
+
