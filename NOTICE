@@ -547,18 +547,28 @@ unchanged for any contact whose workspace has no lifecycle_stage field.
 
 DEPLOYED BUILDS — the source commit behind each image tag
 ---------------------------------------------------------
-Every Relaticle image this section maps was built from THIS repository, at the
-commit in the table below, on branch `platform`. Nothing deployed contains tree
-state that is not in these commits. (The older tags still on the host —
-`3.6.3-logout-console-exit` and earlier — correspond to parts 1-6 of this file.)
+Every image tag this section maps is a build of THIS repository. The commit named
+for it is the one the image was COMPARED against: every source file the image
+carries was extracted and hashed (sha256) and matched file by file, so the counts
+below are a measurement, not a claim. The only files an image holds that no commit
+holds are the ones the build or the first boot generates
+(`bootstrap/cache/{packages,services,blade-icons}.php`, `database/database.sqlite`),
+which .gitignore covers and which no source offer needs. (The older tags still on
+the host, `3.6.3-logout-console-exit` and earlier, correspond to parts 1-6.)
 
-  image tag                                                  commit
-  ghcr.io/pthk100/relaticle-platform:3.6.3-contact-fields    9c6eea84c
-      part 7
-  ghcr.io/pthk100/relaticle-platform:3.6.3-consent-mirror    110b31241
-      parts 7 and 8
-  ghcr.io/pthk100/relaticle-platform:3.6.3-lifecycle-stage   a1e8338fb
-      parts 7, 8 and 9
+  tag                                    source commit                       compared
+  :3.6.3-contact-fields                  9c6eea84c  (`platform`)              2473 files, all identical
+      part 7. The image also carries the three bootstrap/cache files above.
+  :3.6.3-consent-mirror                  c0f118aa2                          2476 files, all identical
+                                         (`deployed/3.6.3-consent-mirror`)
+      parts 7 and 8 as they were on 2026-10-28. NOT 110b31241: the consent card
+      was revised AFTER this image was built and its final state is what `platform`
+      carries, so the image's tree is an earlier state of that same card, in six
+      files (WriteConsentMirror, ConsentMirrorGuard, People, PeopleField,
+      PlatformContactFieldSet, FieldOptionRows). This branch publishes exactly that
+      earlier state; it is superseded and merged nowhere.
+  :3.6.3-lifecycle-stage                 a1e8338fb  (`platform`)              2484 files, all identical
+      parts 7, 8 and 9. The tag the running containers use.
 
 Going from a running container to its source, without asking anyone:
 
@@ -569,10 +579,10 @@ Going from a running container to its source, without asking anyone:
   $ git -C relaticle checkout a1e8338fb && docker build -t relaticle-local .
 
 The tags are HOST-LOCAL: each was built with `docker build` on the dev host and
-has never been pushed, because no registry credential for `pthk100` exists on that
-host or on the build workstation (`docker push` answers "unauthorized"). The image
-tag is therefore a name for a local image id, not a published artefact, and this
-repository at the commit above is the whole of the §13 source offer for it. The
-image's own contents are the tree at that commit; the Dockerfile in it rebuilds the
-same application.
+none has been pushed, because no registry credential for `pthk100` exists on that
+host or on the build workstation (an anonymous push is refused: "error from
+registry: denied"). A tag is therefore a name for a local image id, not a
+published artefact, and this repository at the commit above is the whole of the
+§13 source offer for it. The Dockerfile at that commit rebuilds the same
+application.
 
