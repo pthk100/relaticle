@@ -590,6 +590,51 @@ Upstream behaviour is unchanged: no existing route, ability or pin changes, and 
 workspace created or adopted exactly as before still answers exactly as it did.
 
 
+THE MODIFICATION (2026-10-29, part 11) - the lifecycle_stage correction pass compares
+                                      every contact instead of trusting a cursor
+-------------------------------------------------------------------------------
+Changed: `LifecycleStageReconciler` and the `platform:reconcile-lifecycle-stages`
+command (the `*/5` schedule entry and its `03:40 --full`). No route, model, migration
+or schema is touched.
+
+Reason: `lifecycle_stage` is derived from the contact's deals, and the correction pass
+that repairs a value written behind the application selected contacts by timestamp -
+`opportunities.updated_at`, and `activity_log` rows about an opportunity, since
+`cursor - 600s`. A `custom_field_values` row carries no timestamps at all and a write
+straight into Postgres fires no audit trigger, so such a value produced neither, was
+invisible to the five-minute tick, and was repaired only by the nightly full sweep.
+Measured on the platform's dev host (2026-10-28, two contacts corrupted at the same
+instant): the one whose deals had moved inside the window came back on the next tick;
+the one whose deal had last been touched six days earlier was still wrong after two
+ticks and was fixed only when a human ran `--full`.
+
+The pass now COMPARES: every live contact's stored value against the stage its live
+opportunities justify, writing only the contacts that disagree. Three queries per
+workspace (stored values, derived answer, contacts with no usable value row) and one
+write per wrong contact. The rule itself is still `LifecycleStage::fromOpportunityStages()`
+and nothing else, so the detector and the writer cannot disagree. The per-tick work is
+bounded by `--budget` (default 5000 contacts; whole workspaces are deferred and counted,
+never half-swept) and `--full` is the same pass with no budget. The cursor row is still
+written as an observability high-water mark and gates nothing.
+
+Files changed:
+  app/Support/LifecycleStage/LifecycleStageReconciler.php
+      `touchedContacts()` (both cursor legs) and its `activity_log` query are removed;
+      `driftSet()` + `write()` replace the chunked walk of every contact; `storedStages()`
+      joins `people` with `deleted_at IS NULL`; `contactsWithoutAStageValue()` is new
+  app/Console/Commands/ReconcileLifecycleStagesCommand.php
+      `--budget`, and an output line that reports contacts compared, corrected and
+      workspaces not visited
+  bootstrap/app.php                       the schedule entries and their comment
+  tests/Feature/LifecycleStage/LifecycleStageTest.php
+      the tick case (a cursor in place, both old legs outside their window), the
+      no-value-row case, the soft-deleted case, the deferral case, idempotency
+
+Upstream behaviour is unchanged for every path that reads the field: the observers
+still write it inside the write, the guard still refuses a hand edit, and a derived
+change still writes no `activity_log` row.
+
+
 DEPLOYED BUILDS — the source commit behind each image tag
 ---------------------------------------------------------
 Every image tag this section maps is a build of THIS repository. The commit named
@@ -623,14 +668,26 @@ the host, `3.6.3-logout-console-exit` and earlier, correspond to parts 1-6.)
       context; the next full sweep should name this tag. The image's own copy of
       this NOTICE is the pre-part-10 text, because part 10 was written after the
       build (the same way the 2026-10-28 tag rows were corrected after theirs).
+  :3.6.3-stage-sweep                     944336d65  (`platform`)              spot-checked, see below
+      parts 7-11. The first build of part 11, run on the host for about twenty
+      minutes on 2026-10-29: it counted a soft-deleted contact's value row, which
+      the write path cannot reach. Superseded by the row below, and kept on the
+      host as the rollback for it, not deleted.
+  :3.6.3-stage-sweep-2                   2402bdf78  (`platform`)              spot-checked, see below
+      parts 7-11 plus that one filter. The tag the running containers use.
+      Checked the way :3.6.3-token-reissue was: the three files this part touches,
+      sha256 of each, image vs commit, all identical (the platform card records the
+      three hashes). The tree is a `git archive` of 2402bdf78. The image's own copy
+      of this NOTICE is the pre-part-11 text, because part 11 was written after the
+      build.
 
 Going from a running container to its source, without asking anyone:
 
   $ docker inspect marketing-platform-relaticle-1 --format '{{.Config.Image}}'
-  ghcr.io/pthk100/relaticle-platform:3.6.3-lifecycle-stage
+  ghcr.io/pthk100/relaticle-platform:3.6.3-stage-sweep-2
   $ git clone https://github.com/pthk100/relaticle.git
-  $ git -C relaticle show a1e8338fb --stat
-  $ git -C relaticle checkout a1e8338fb && docker build -t relaticle-local .
+  $ git -C relaticle show 2402bdf78 --stat
+  $ git -C relaticle checkout 2402bdf78 && docker build -t relaticle-local .
 
 The tags are HOST-LOCAL: each was built with `docker build` on the dev host and
 none has been pushed, because no registry credential for `pthk100` exists on that
