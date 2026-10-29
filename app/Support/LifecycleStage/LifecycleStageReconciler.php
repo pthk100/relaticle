@@ -290,6 +290,12 @@ final readonly class LifecycleStageReconciler
      * reported as itself, so it compares unequal to the derived answer and gets
      * corrected instead of looking like "no value at all".
      *
+     * SOFT-DELETED CONTACTS ARE JOINED OUT, not merely skipped at write time. They
+     * keep their value rows (the delete is a timestamp), the write path cannot see
+     * them (`People::query()` applies the soft-delete scope), and counting them would
+     * put contacts in the drift set that no pass can ever satisfy: measured on DEV050
+     * 2026-10-29, the E2E probe teardown left five of them behind under a `lead` row.
+     *
      * @return array<string, string> person id => option name (or the raw stored value)
      */
     private function storedStages(string $workspaceId): array
@@ -299,6 +305,7 @@ final readonly class LifecycleStageReconciler
                     COALESCE(o.name, v.string_value, v.integer_value::text) AS stage_name
                FROM custom_field_values v
                JOIN custom_fields f ON f.id = v.custom_field_id
+               JOIN people p ON p.id = v.entity_id AND p.deleted_at IS NULL
                LEFT JOIN custom_field_options o
                       ON o.custom_field_id = v.custom_field_id
                      AND (o.id = v.string_value OR o.name = v.string_value)

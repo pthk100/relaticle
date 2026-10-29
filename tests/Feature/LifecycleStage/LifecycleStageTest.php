@@ -302,6 +302,28 @@ it('gives lead to a contact whose stage row was deleted outright', function (): 
         ->and(stageOf($personId))->toBe('lead');
 });
 
+it('ignores a soft-deleted contact that still holds a stage row', function (): void {
+    // The E2E teardown shape: the person is deleted, the value row stays. The write
+    // path cannot see the person at all, so counting it would put a contact in the
+    // drift set that no pass can ever satisfy.
+    $personId = $this->postJson('/api/v1/people', ['name' => 'Deleted Contact'])
+        ->assertCreated()
+        ->json('data.id');
+
+    $reconciler = app(LifecycleStageReconciler::class);
+
+    $live = $reconciler->incremental();
+
+    People::query()->withoutGlobalScope(WorkspaceScope::class)->whereKey($personId)->firstOrFail()->delete();
+
+    stageBehindTheApplication($personId, 'customer');
+
+    $after = $reconciler->incremental();
+
+    expect($after['compared'])->toBe($live['compared'] - 1)
+        ->and($after['changed'])->toBe(0);
+});
+
 it('is idempotent — a second sweep corrects nothing', function (): void {
     opportunity(stage: 'Closed Won');
 
