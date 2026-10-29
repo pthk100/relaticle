@@ -5,16 +5,14 @@ declare(strict_types=1);
 namespace App\Support\LifecycleStage;
 
 use App\Enums\CustomFields\PeopleField;
-use App\Models\Opportunity;
 use App\Models\People;
 use App\Models\Workspace;
 use App\Support\CurrentWorkspace;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
-use Relaticle\CustomFields\Facades\Entities;
 
 /**
- * THE RECONCILIATION PASS for `lifecycle_stage` (t_7273de85).
+ * THE RECONCILIATION PASS for `lifecycle_stage` (t_7273de85, t_885ca3bf).
  *
  * ── Why an observer is not enough ───────────────────────────────────────────
  * The observers (`OpportunityObserver`, `CustomFieldValueObserver`) recompute the
@@ -24,25 +22,49 @@ use Relaticle\CustomFields\Facades\Entities;
  * after its deals were already closed, or a projection that failed while the CRM
  * was mid-rollout. The sweep is what makes the field TRUE rather than fresh.
  *
- * ── Two modes, and the cursor each one uses ─────────────────────────────────
- * INCREMENTAL (`--incremental`, the schedule's five-minute tick) reads two legs
- * per workspace, both keyed on a timestamp cursor kept in
- * `platform_reconcile_cursors` under the name `lifecycle_stage`:
+ * ── Why the pass does not trust a cursor (t_885ca3bf) ───────────────────────
+ * It used to. The five-minute tick selected contacts by two timestamp legs since
+ * `cursor - OVERLAP_SECONDS`: `opportunities.updated_at`, and `activity_log` rows
+ * about an opportunity. Neither leg can see the case this class exists for.
+ * `custom_field_values` carries NO timestamps at all (`\d custom_field_values`:
+ * id/tenant/entity/custom_field/value: no created_at, no updated_at) and a psql
+ * write fires no audit trigger, so a value written behind the application was
+ * invisible to the tick and waited for the nightly `--full`.
  *
- *   a) `opportunities.updated_at >= cursor` - creation, contact change, soft
- *      delete. A stage change does NOT touch the opportunity row, which is the
- *      trap: the value lives in `custom_field_values`, so
- *   b) `custom_field_values.updated_at >= cursor` for the workspace's `stage`
- *      field is the leg that sees a human drag a deal to Closed Won.
+ * Measured on DEV050 2026-10-28 (docs/ops/t_ad051f97-scheduler-evidence.md §4):
+ * two contacts corrupted at the same instant, one whose deals had moved inside
+ * the window and one whose had not. The first came back on the 19:30:05 tick; the
+ * second was still wrong after the 19:30:05 AND 19:35:04 ticks, and only the full
+ * pass fixed it. That is the shape of the bug: the tick's coverage was a function
+ * of WHEN the contact was last touched, and a contact nobody touches is exactly
+ * the one whose stage drifts unnoticed.
  *
- * The window starts `OVERLAP_SECONDS` BEFORE the cursor. That overlap is the
- * correctness margin: a row committed while the previous pass was reading still
- * has an `updated_at` inside it, and a clock that disagrees with ours by a few
- * seconds then costs one extra recomputation instead of one missed deal.
+ * So the tick now answers the question directly instead of inferring it from
+ * change times: COMPARE the stored stage of every contact against the stage its
+ * live deals justify, and write only the ones that disagree. That is O(contacts)
+ * per tick rather than O(changes), which is the trade this card takes (option 1)
+ * and the reason for `DEFAULT_CONTACT_BUDGET` below: today's fleet is 61 contacts
+ * in 47 workspaces (one second, measured), and the budget is where that stops
+ * being a free assumption.
  *
- * FULL (`--full`, nightly) ignores the cursor and recomputes every contact in
- * every workspace. It is the answer to everything the cursor cannot see (hard
- * deletes, a stage value row deleted outright, a person created before the field).
+ * ── Why not the alternatives ────────────────────────────────────────────────
+ * A trigger on `custom_field_values` writing an `activity_log` row WOULD see a
+ * psql write, and it costs O(changes). It also makes every derived write produce
+ * an activity row unless the trigger excludes this field id, which contradicts
+ * the projector's stated contract ("a derived change never appears in the
+ * contact's activity timeline as if a human had made it"), puts a per-row join
+ * on the CRM's hottest write path, and puts `lifecycle_stage` corrections into
+ * `activity_log`, which is ADR-4's CDC source. A stored per-workspace digest
+ * (option 3) needs a state table that can itself be stale, and one wrong digest
+ * silently re-creates this same bug. Comparing the answer costs a scan and needs
+ * no new state, so it cannot be wrong about whether there is drift.
+ *
+ * ── Two modes, one comparison ───────────────────────────────────────────────
+ * `--incremental` is the five-minute tick: every live workspace, under a contact
+ * budget (`--budget`, default 5000). `--full` is the nightly pass and the
+ * operator's on-demand one: identical work with the budget switched off. Both are
+ * complete at this fleet size; the budget only names the point where the tick
+ * starts deferring workspaces to the next tick instead of overrunning its slot.
  *
  * ── Idempotent by construction ──────────────────────────────────────────────
  * The projector writes only when the stored value differs, so running either mode
@@ -54,11 +76,21 @@ final readonly class LifecycleStageReconciler
     public const string CURSOR_NAME = 'lifecycle_stage';
 
     /**
-     * How far back of the cursor each incremental pass re-reads. Ten minutes is
-     * two schedule ticks: enough to absorb commit/clock skew, cheap enough that a
-     * tenant with a busy pipeline re-reads a handful of deals, not its history.
+     * How many contacts ONE tick may compare before it defers the remaining
+     * workspaces to the next tick.
+     *
+     * Not a performance guard for today: DEV050's whole fleet is 61 contacts and
+     * 47 workspaces, and a complete pass takes about a second (measured
+     * 2026-10-28). It is the number that stops "O(contacts) every five minutes"
+     * from being an unstated assumption. At 5,000 the tick still finishes in a
+     * few seconds, and a fleet that outgrows it starts rotating instead of
+     * overrunning. The nightly `--full` has no budget, so nothing can stay
+     * deferred for more than a day even if the tick is starved every time.
      */
-    public const int OVERLAP_SECONDS = 600;
+    public const int DEFAULT_CONTACT_BUDGET = 5000;
+
+    /** Contacts read per query when the pass has something to write. */
+    private const int WRITE_CHUNK = 500;
 
     public function __construct(
         private LifecycleStageProjector $projector,
@@ -66,46 +98,67 @@ final readonly class LifecycleStageReconciler
     ) {}
 
     /**
-     * @return array{mode: string, workspaces: int, scanned: int, changed: int, cursor: string|null}
+     * The nightly pass: every contact of every live workspace.
+     *
+     * @return array{mode: string, workspaces: int, compared: int, changed: int, deferred: int, cursor: string|null}
      */
-    public function full(int $chunk = 500): array
+    public function full(int $chunk = self::WRITE_CHUNK): array
     {
+        return $this->sweep('full', $chunk, null);
+    }
+
+    /**
+     * The five-minute tick: the same comparison, with the per-tick contact budget.
+     *
+     * @return array{mode: string, workspaces: int, compared: int, changed: int, deferred: int, cursor: string|null}
+     */
+    public function incremental(int $budget = self::DEFAULT_CONTACT_BUDGET, int $chunk = self::WRITE_CHUNK): array
+    {
+        return $this->sweep('incremental', $chunk, $budget);
+    }
+
+    /**
+     * One pass. The only difference between the two public modes is `$budget`.
+     *
+     * @return array{mode: string, workspaces: int, compared: int, changed: int, deferred: int, cursor: string|null}
+     */
+    private function sweep(string $mode, int $chunk, ?int $budget): array
+    {
+        $workspaceIds = $this->workspaceIds();
         $workspaces = 0;
-        $scanned = 0;
+        $compared = 0;
         $changed = 0;
+        $deferred = 0;
         $highWater = null;
 
-        foreach ($this->workspaceIds() as $workspaceId) {
-            if ($this->projector->peopleField($workspaceId) === null) {
+        foreach ($workspaceIds as $index => $workspaceId) {
+            $field = $this->projector->peopleField($workspaceId);
+
+            if ($field === null) {
                 // A workspace that never received the field set: nothing to write.
                 continue;
             }
 
+            $targets = $this->driftSet($workspaceId, $field);
+
+            // A workspace is the unit of work, never half of one: the budget is
+            // checked before it is started, so a deferral costs a tick and never a
+            // torn comparison. The first workspace is always taken, so a budget
+            // smaller than one workspace cannot stop the pass making progress.
+            if ($budget !== null && $workspaces > 0 && $compared + $targets['compared'] > $budget) {
+                $deferred = count($workspaceIds) - $index;
+
+                break;
+            }
+
             $workspaces++;
-            $stages = $this->projector->stageNamesByContact($workspaceId);
-            $stored = $this->storedStages($workspaceId);
+            $compared += $targets['compared'];
 
-            $this->currentWorkspace->within($workspaceId, function () use ($workspaceId, $stages, $stored, $chunk, &$scanned, &$changed): void {
-                People::query()
-                    ->where('workspace_id', $workspaceId)
-                    ->orderBy('id')
-                    ->chunkById($chunk, function ($people) use ($stages, $stored, &$scanned, &$changed): void {
-                        foreach ($people as $person) {
-                            $personId = (string) $person->getKey();
-                            $target = LifecycleStage::fromOpportunityStages($stages[$personId] ?? []);
-
-                            $scanned++;
-
-                            if (($stored[$personId] ?? null) === $target) {
-                                continue;
-                            }
-
-                            if ($this->projector->store($person, $target)) {
-                                $changed++;
-                            }
-                        }
-                    });
-            });
+            // Only the correction count is reported: the write path's own `read` is
+            // the same number unless a contact vanished between the comparison and the
+            // write, and an operator reads `compared` for coverage.
+            [, $corrected] = $this->write($workspaceId, $targets['people'], $chunk);
+            $changed += $corrected;
 
             $cursor = $this->highWater($workspaceId);
 
@@ -119,92 +172,105 @@ final readonly class LifecycleStageReconciler
         }
 
         return [
-            'mode' => 'full',
+            'mode' => $mode,
             'workspaces' => $workspaces,
-            'scanned' => $scanned,
+            'compared' => $compared,
             'changed' => $changed,
+            'deferred' => $deferred,
             'cursor' => $this->readCursor(),
         ];
     }
 
     /**
-     * @return array{mode: string, workspaces: int, scanned: int, changed: int, cursor: string|null}
-     */
-    public function incremental(): array
-    {
-        $cursor = $this->readCursor();
-
-        if ($cursor === null) {
-            // No cursor is not "nothing changed since the beginning of time": it is
-            // "this has never run here", and the only honest pass is the full one.
-            return $this->full();
-        }
-
-        $windowStart = CarbonImmutable::parse($cursor)->subSeconds(self::OVERLAP_SECONDS);
-        $workspaces = 0;
-        $scanned = 0;
-        $changed = 0;
-        $highWater = $cursor;
-
-        foreach ($this->workspaceIds() as $workspaceId) {
-            if ($this->projector->peopleField($workspaceId) === null) {
-                continue;
-            }
-
-            $workspaces++;
-
-            [$contactIds, $seen] = $this->touchedContacts($workspaceId, $windowStart);
-
-            if ($seen !== null && $seen > $highWater) {
-                $highWater = $seen;
-            }
-
-            if ($contactIds === []) {
-                continue;
-            }
-
-            [$read, $corrected] = $this->projectContacts($workspaceId, $contactIds);
-            $scanned += $read;
-            $changed += $corrected;
-        }
-
-        $this->writeCursor($highWater);
-
-        return [
-            'mode' => 'incremental',
-            'workspaces' => $workspaces,
-            'scanned' => $scanned,
-            'changed' => $changed,
-            'cursor' => $this->readCursor(),
-        ];
-    }
-
-    /**
-     * Recompute one workspace's touched contacts. Returns `[read, corrected]`.
+     * The contacts of one workspace whose stored stage the deals do not justify,
+     * with the stage each one should hold.
      *
-     * @param  list<string>  $contactIds
-     * @return array{int, int}
+     * ── Why the candidate set is three queries and not one ──────────────────────
+     * A contact can be wrong in any of three places, and each is a different row:
+     *
+     *   · it has a `lifecycle_stage` value row holding the wrong option (the psql
+     *     write, the restore, the projection that failed): `storedStages()`;
+     *   · it has live deals whose stages justify a different answer: every such
+     *     contact appears in `stageNamesByContact()`;
+     *   · it has no usable value row at all and no deal, so it appears in NEITHER
+     *     map and would be invisible. `contactsWithoutAStageValue()` catches it. A contact
+     *     in the address book with no deal is `lead`, and "the row is missing" is
+     *     not the same fact as "the row says lead".
+     *
+     * The union of the three is every contact in the workspace, so the comparison
+     * is complete: nothing is inferred from WHEN anything was written.
+     *
+     * @param  array{id: string, type: string, entity_type: string}  $field
+     * @return array{compared: int, people: array<string, string>} compared, and person id => the stage it should hold
      */
-    private function projectContacts(string $workspaceId, array $contactIds): array
+    private function driftSet(string $workspaceId, array $field): array
     {
-        return $this->currentWorkspace->within($workspaceId, function () use ($workspaceId, $contactIds): array {
-            $people = People::query()
-                ->where('workspace_id', $workspaceId)
-                ->whereIn('id', $contactIds)
-                ->get();
+        $stages = $this->projector->stageNamesByContact($workspaceId);
+        $stored = $this->storedStages($workspaceId);
+        $withoutValue = $this->contactsWithoutAStageValue($workspaceId, $field);
 
+        $candidates = $stages + array_fill_keys(array_keys($stored), []);
+
+        foreach ($withoutValue as $personId) {
+            $candidates[$personId] ??= [];
+        }
+
+        $people = [];
+
+        foreach ($candidates as $personId => $stageNames) {
+            $personId = (string) $personId;
+            $target = LifecycleStage::fromOpportunityStages($stageNames);
+
+            if (($stored[$personId] ?? null) !== $target) {
+                $people[$personId] = $target;
+            }
+        }
+
+        return ['compared' => count($candidates), 'people' => $people];
+    }
+
+    /**
+     * Write the contacts the comparison found, one chunk at a time.
+     *
+     * Only the drift is loaded: the previous shape walked every contact of the
+     * workspace through the model layer to compare it, which turned a pass that
+     * should cost one row per wrong contact into a read of the whole address book.
+     *
+     * @param  array<string, string>  $targets  person id => the stage it should hold
+     * @return array{int, int} contacts read, contacts corrected
+     */
+    private function write(string $workspaceId, array $targets, int $chunk): array
+    {
+        if ($targets === []) {
+            return [0, 0];
+        }
+
+        $chunk = max(1, $chunk);
+
+        return $this->currentWorkspace->within($workspaceId, function () use ($workspaceId, $targets, $chunk): array {
             $read = 0;
             $corrected = 0;
 
-            foreach ($people as $person) {
-                $read++;
+            foreach (array_chunk($targets, $chunk, true) as $batch) {
+                $people = People::query()
+                    ->where('workspace_id', $workspaceId)
+                    ->whereIn('id', array_keys($batch))
+                    ->get();
 
-                $before = $this->projector->storedStage($person);
+                foreach ($people as $person) {
+                    $read++;
 
-                $this->projector->projectPerson($workspaceId, (string) $person->getKey());
+                    $target = $batch[(string) $person->getKey()] ?? null;
 
-                if ($this->projector->storedStage($person->fresh() ?? $person) !== $before) {
-                    $corrected++;
+                    if ($target === null) {
+                        continue;
+                    }
+
+                    // The projector is the ONLY writer, and it writes only when the
+                    // stored value differs from the one it is handed.
+                    if ($this->projector->store($person, $target)) {
+                        $corrected++;
+                    }
                 }
             }
 
@@ -213,94 +279,85 @@ final readonly class LifecycleStageReconciler
     }
 
     /**
-     * The contacts touched since `$windowStart` by either leg, and the newest
-     * timestamp either leg saw (the next cursor).
+     * The stored stage of every contact in one workspace that HAS a usable value,
+     * in ONE query: the pass must not become one read per person.
      *
-     * @return array{0: list<string>, 1: string|null}
-     */
-    private function touchedContacts(string $workspaceId, CarbonImmutable $windowStart): array
-    {
-        // Leg (a): the opportunity ROWS. Creation, a contact move, a soft delete.
-        $byOpportunity = DB::table('opportunities')
-            ->where('workspace_id', $workspaceId)
-            ->where('updated_at', '>=', $windowStart)
-            ->get(['id', 'contact_id', 'updated_at']);
-
-        // Leg (b): the STAGE move. `custom_field_values` carries no timestamps at all,
-        // and a stage change does not touch the opportunity row, so the activity log is
-        // the only durable "something about this deal changed at this instant" record
-        // the CRM keeps (every custom-field edit writes one, `CustomFieldChangeLog`).
-        // Without this leg a stage move would be invisible to the cursor and the sweep
-        // would only ever see it on its nightly full pass.
-        $byActivity = DB::table('activity_log')
-            ->where('subject_type', $this->opportunityEntityType())
-            ->where('created_at', '>=', $windowStart)
-            ->get(['subject_id', 'created_at']);
-
-        $opportunityIds = $byOpportunity->pluck('id')
-            ->merge($byActivity->pluck('subject_id'))
-            ->filter()
-            ->unique()
-            ->values();
-
-        $seen = $byOpportunity->pluck('updated_at')
-            ->merge($byActivity->pluck('created_at'))
-            ->filter()
-            ->max();
-
-        if ($opportunityIds->isEmpty()) {
-            return [[], $seen === null ? null : (string) $seen];
-        }
-
-        // The activity leg only knew opportunity ids; the contact is the join. Soft
-        // deleted opportunities are included on purpose: a deleted deal still changes
-        // its contact's answer.
-        $contactIds = DB::table('opportunities')
-            ->whereIn('id', $opportunityIds->all())
-            ->whereNotNull('contact_id')
-            ->pluck('contact_id')
-            ->unique()
-            ->values()
-            ->map(static fn ($id): string => (string) $id)
-            ->all();
-
-        return [array_values($contactIds), $seen === null ? null : (string) $seen];
-    }
-
-    /**
-     * The stored stage of every contact in one workspace, in ONE query: the sweep
-     * must not become one read per person.
+     * The stored value is the option ID on one write path and the raw label on
+     * another (a direct `saveCustomFields()` call does not normalise a label the
+     * way the REST layer does), and a restore can leave it pointing at an option
+     * that no longer exists. Resolving all three shapes here means the comparison
+     * reads the same answer a human sees, and a value nothing can resolve is
+     * reported as itself, so it compares unequal to the derived answer and gets
+     * corrected instead of looking like "no value at all".
      *
-     * @return array<string, string> person id => option name
+     * @return array<string, string> person id => option name (or the raw stored value)
      */
     private function storedStages(string $workspaceId): array
     {
-        // The stored value is the option ID on one write path and the raw label on
-        // another (a direct `saveCustomFields()` call does not normalise a label the way
-        // the REST layer does). Resolving both here means the sweep compares against the
-        // same answer a human sees, whichever shape the row holds.
         $rows = DB::select(
-            'SELECT v.entity_id AS entity_id, o.name AS stage_name
+            'SELECT v.entity_id AS entity_id,
+                    COALESCE(o.name, v.string_value, v.integer_value::text) AS stage_name
                FROM custom_field_values v
                JOIN custom_fields f ON f.id = v.custom_field_id
                LEFT JOIN custom_field_options o
                       ON o.custom_field_id = v.custom_field_id
                      AND (o.id = v.string_value OR o.name = v.string_value)
-              WHERE v.tenant_id = ? AND f.tenant_id = ? AND f.entity_type = ? AND f.code = ?',
+              WHERE v.tenant_id = ? AND f.tenant_id = ? AND f.entity_type = ? AND f.code = ?
+                AND COALESCE(v.string_value, v.integer_value::text) IS NOT NULL
+                AND COALESCE(v.string_value, v.integer_value::text) <> \'\'',
             [$workspaceId, $workspaceId, 'people', PeopleField::LIFECYCLE_STAGE->value],
         );
 
         $map = [];
 
         foreach ($rows as $row) {
-            if ($row->stage_name !== null) {
-                $map[(string) $row->entity_id] = (string) $row->stage_name;
-            }
+            $map[(string) $row->entity_id] = (string) $row->stage_name;
         }
 
         return $map;
     }
 
+    /**
+     * The contacts of one workspace with no usable `lifecycle_stage` value row.
+     *
+     * These are the contacts the two comparison maps cannot see: no row means no
+     * entry in `storedStages()`, and no deal means no entry in
+     * `stageNamesByContact()`. A contact that predates the field, or whose value
+     * row was deleted outright, is exactly that shape, and it is the case the
+     * nightly sweep's own doc comment names, so the tick must see it too.
+     *
+     * @param  array{id: string, type: string, entity_type: string}  $field
+     * @return list<string>
+     */
+    private function contactsWithoutAStageValue(string $workspaceId, array $field): array
+    {
+        /** @var list<object{id: string}> $rows */
+        $rows = DB::select(
+            'SELECT p.id AS id
+               FROM people p
+               LEFT JOIN custom_field_values v
+                      ON v.entity_id = p.id
+                     AND v.entity_type = ?
+                     AND v.tenant_id = ?
+                     AND v.custom_field_id = ?
+              WHERE p.workspace_id = ? AND p.deleted_at IS NULL
+                AND (v.id IS NULL
+                     OR COALESCE(v.string_value, v.integer_value::text) IS NULL
+                     OR COALESCE(v.string_value, v.integer_value::text) = \'\')',
+            ['people', $workspaceId, $field['id'], $workspaceId],
+        );
+
+        return array_map(static fn (object $row): string => (string) $row->id, $rows);
+    }
+
+    /**
+     * The newest `opportunities.updated_at` in the workspace.
+     *
+     * Kept for what a cursor is still good for: an operator reading
+     * `platform_reconcile_cursors` sees how far the opportunity stream had been
+     * read at the last pass. It gates nothing. See the class comment for why the
+     * pass stopped trusting it (t_885ca3bf).
+     */
     private function highWater(string $workspaceId): ?string
     {
         $stamp = DB::table('opportunities')
@@ -354,10 +411,5 @@ final readonly class LifecycleStageReconciler
             ->pluck('id')
             ->map(static fn ($id): string => (string) $id)
             ->all());
-    }
-
-    private function opportunityEntityType(): string
-    {
-        return Entities::getEntity(Opportunity::class)?->getAlias() ?? 'opportunity';
     }
 }

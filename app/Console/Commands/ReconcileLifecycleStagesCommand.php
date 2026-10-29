@@ -10,40 +10,44 @@ use Illuminate\Console\Attributes\Signature;
 use Illuminate\Console\Command;
 
 /**
- * The `lifecycle_stage` reconciliation pass (t_7273de85).
+ * The `lifecycle_stage` reconciliation pass (t_7273de85, t_885ca3bf).
  *
  * Two modes, both idempotent, both named in the schedule entry in
- * `bootstrap/app.php`:
+ * `bootstrap/app.php`, both the SAME comparison of stored answer against derived
+ * answer for every contact of every live workspace:
  *
- *   --incremental  the five-minute tick; reads contacts whose opportunities or
- *                  stage values moved since the cursor (`platform_reconcile_cursors`,
- *                  name `lifecycle_stage`, minus a ten-minute overlap)
- *   --full         the nightly sweep; every contact in every workspace, which is
- *                  the only thing that catches a hard delete or a value row written
- *                  behind the application's back
+ *   --incremental  the five-minute tick; stops before `--budget` contacts and
+ *                  reports how many workspaces it left for the next tick
+ *   --full         the nightly sweep and the operator's on-demand pass; no budget
  *
- * Its output is the operator's evidence: how many contacts it read, how many it
- * had to CHANGE. A sweep that changes something is not a problem - it is the
- * field being corrected, which is exactly what it exists for.
+ * Its output is the operator's evidence: how many contacts it COMPARED, how many
+ * it had to CHANGE, and how many workspaces it did not reach. A sweep that
+ * changes something is not a problem - it is the field being corrected, which is
+ * exactly what it exists for. A sweep that reaches everything and changes nothing
+ * is the field being TRUE.
  */
-#[Description('Recompute the derived lifecycle_stage of every contact, or of those touched since the last pass')]
+#[Description('Recompute the derived lifecycle_stage of every contact, and write only the ones that disagree')]
 #[Signature('platform:reconcile-lifecycle-stages
-                            {--full : Sweep every contact in every workspace instead of using the cursor}
-                            {--chunk=500 : Contacts read per database chunk in a full sweep}')]
+                            {--full : Compare every contact in every workspace with no per-tick contact budget}
+                            {--budget=5000 : Contacts the tick may compare before it defers the remaining workspaces}
+                            {--chunk=500 : Contacts read per database chunk when the pass has corrections to write}')]
 final class ReconcileLifecycleStagesCommand extends Command
 {
     public function handle(LifecycleStageReconciler $reconciler): int
     {
+        $chunk = (int) $this->option('chunk');
+
         $result = $this->option('full') === true
-            ? $reconciler->full((int) $this->option('chunk'))
-            : $reconciler->incremental();
+            ? $reconciler->full($chunk)
+            : $reconciler->incremental((int) $this->option('budget'), $chunk);
 
         $this->info(sprintf(
-            '%s pass: %d workspace(s), %d contact(s) read, %d corrected; cursor %s',
+            '%s pass: %d workspace(s), %d contact(s) compared, %d corrected, %d workspace(s) not visited; cursor %s',
             $result['mode'],
             $result['workspaces'],
-            $result['scanned'],
+            $result['compared'],
             $result['changed'],
+            $result['deferred'],
             $result['cursor'] ?? 'none',
         ));
 

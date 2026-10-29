@@ -12,10 +12,11 @@ use App\Models\Scopes\WorkspaceScope;
 use App\Models\User;
 use App\Support\LifecycleStage\LifecycleStage;
 use App\Support\LifecycleStage\LifecycleStageGuard;
-use App\Support\LifecycleStage\LifecycleStageProjector;
 use App\Support\LifecycleStage\LifecycleStageProjection;
+use App\Support\LifecycleStage\LifecycleStageProjector;
 use App\Support\LifecycleStage\LifecycleStageReconciler;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use Laravel\Sanctum\Sanctum;
 
 mutates(
@@ -196,25 +197,35 @@ it('leaves ordinary contact edits alone — an omitted stage is not a cleared st
     expect(stageOf($this->personId))->toBe('customer');
 });
 
-it('overwrites a stage written behind the application, on the next reconciliation', function (): void {
+/**
+ * The bypass every test below needs: write the value straight into the value row,
+ * the way psql, a restore, or a projection that died on a quiet contact does.
+ *
+ * It fires nothing. `custom_field_values` has no timestamps and no audit trigger,
+ * so this write leaves no trace any observer or cursor can see — which is the bug
+ * t_885ca3bf is about.
+ */
+function stageBehindTheApplication(string $personId, string $optionName): void
+{
     $field = CustomField::query()
         ->withoutGlobalScopes()
-        ->where('tenant_id', $this->workspace->getKey())
         ->where('entity_type', 'people')
         ->where('code', PeopleField::LIFECYCLE_STAGE->value)
         ->firstOrFail();
 
-    $customerOption = DB::table('custom_field_options')
+    $optionId = DB::table('custom_field_options')
         ->where('custom_field_id', $field->getKey())
-        ->where('name', 'customer')
+        ->where('name', $optionName)
         ->value('id');
 
-    // The bypass: straight into the value row, as psql or a restore would. The guard
-    // above cannot see this, which is why the reconciler exists.
     DB::table('custom_field_values')
         ->where('custom_field_id', $field->getKey())
-        ->where('entity_id', $this->personId)
-        ->update(['string_value' => $customerOption]);
+        ->where('entity_id', $personId)
+        ->update(['string_value' => $optionId]);
+}
+
+it('overwrites a stage written behind the application, on the next reconciliation', function (): void {
+    stageBehindTheApplication($this->personId, 'customer');
 
     expect(stageOf($this->personId))->toBe('customer');
 
@@ -224,6 +235,73 @@ it('overwrites a stage written behind the application, on the next reconciliatio
         ->and(stageOf($this->personId))->toBe('lead');
 });
 
+it('corrects a value written behind the application on the next five-minute tick', function (): void {
+    // The DEV050 fixture, reproduced: a live deal, corrupted value, and a contact
+    // nobody has touched for six days - the deal row AND its audit trail. The cursor
+    // is written to NOW, so this is a real cursor tick rather than the first-run
+    // fallback, and both of the old tick's legs are outside their window. That is
+    // contact B, the one the old tick could not see.
+    opportunity(stage: 'Prospecting');
+
+    DB::table('opportunities')->update(['updated_at' => now()->subDays(6)]);
+    DB::table('activity_log')->update(['created_at' => now()->subDays(6)]);
+
+    $dealTouchedAt = DB::table('opportunities')->max('updated_at');
+    $activityRows = DB::table('activity_log')->count();
+
+    DB::table('platform_reconcile_cursors')->updateOrInsert(
+        ['name' => LifecycleStageReconciler::CURSOR_NAME],
+        ['value' => now()->toDateTimeString(), 'updated_at' => now()],
+    );
+
+    stageBehindTheApplication($this->personId, 'customer');
+
+    expect(stageOf($this->personId))->toBe('customer')
+        // The old tick's two legs are blind to this write, asserted rather than
+        // assumed: the opportunity timestamp did not move and no activity row exists.
+        ->and(DB::table('opportunities')->max('updated_at'))->toBe($dealTouchedAt)
+        ->and(DB::table('activity_log')->count())->toBe($activityRows);
+
+    $result = app(LifecycleStageReconciler::class)->incremental();
+
+    expect($result['mode'])->toBe('incremental')
+        ->and($result['changed'])->toBeGreaterThanOrEqual(1)
+        ->and(stageOf($this->personId))->toBe('opportunity')
+        // The repair is a projection, never a human edit: it must not appear in the
+        // contact's timeline (LifecycleStageProjector::store()).
+        ->and(DB::table('activity_log')->count())->toBe($activityRows);
+});
+
+it('gives lead to a contact whose stage row was deleted outright', function (): void {
+    // The address-book-only contact: no deals, so `lead`. It appears in neither
+    // comparison map (no value row after the delete, no opportunity ever), which is
+    // the case the drift set has to reach explicitly.
+    $personId = $this->postJson('/api/v1/people', ['name' => 'Address Book Only'])
+        ->assertCreated()
+        ->json('data.id');
+
+    expect(stageOf($personId))->toBe('lead');
+
+    $field = CustomField::query()
+        ->withoutGlobalScopes()
+        ->where('tenant_id', $this->workspace->getKey())
+        ->where('entity_type', 'people')
+        ->where('code', PeopleField::LIFECYCLE_STAGE->value)
+        ->firstOrFail();
+
+    DB::table('custom_field_values')
+        ->where('custom_field_id', $field->getKey())
+        ->where('entity_id', $personId)
+        ->delete();
+
+    expect(stageOf($personId))->toBeNull();
+
+    $result = app(LifecycleStageReconciler::class)->incremental();
+
+    expect($result['changed'])->toBeGreaterThanOrEqual(1)
+        ->and(stageOf($personId))->toBe('lead');
+});
+
 it('is idempotent — a second sweep corrects nothing', function (): void {
     opportunity(stage: 'Closed Won');
 
@@ -231,10 +309,11 @@ it('is idempotent — a second sweep corrects nothing', function (): void {
 
     $reconciler->full();
 
-    expect($reconciler->full()['changed'])->toBe(0);
+    expect($reconciler->incremental()['changed'])->toBe(0)
+        ->and($reconciler->full()['changed'])->toBe(0);
 });
 
-it('falls back to a full pass when the cursor has never been written, then uses it', function (): void {
+it('corrects drift whether or not a cursor was ever written', function (): void {
     opportunity(stage: 'Prospecting');
 
     $reconciler = app(LifecycleStageReconciler::class);
@@ -243,22 +322,46 @@ it('falls back to a full pass when the cursor has never been written, then uses 
 
     $first = $reconciler->incremental();
 
-    expect($first['mode'])->toBe('full')
+    expect($first['mode'])->toBe('incremental')
         ->and($first['cursor'])->not->toBeNull();
+
+    // The cursor is written, and the tick is not gated by it: a value corrupted with
+    // the cursor in place is still corrected on the next one.
+    stageBehindTheApplication($this->personId, 'customer');
 
     $second = $reconciler->incremental();
 
-    expect($second['mode'])->toBe('incremental');
+    expect($second['changed'])->toBeGreaterThanOrEqual(1)
+        ->and(stageOf($this->personId))->toBe('opportunity');
+});
+
+it('defers the workspaces it cannot reach instead of overrunning the tick', function (): void {
+    // A second workspace, so there is something to defer. Creating a workspace seeds
+    // the platform field set, so both are candidates.
+    User::factory()->withPersonalWorkspace()->create();
+
+    $result = app(LifecycleStageReconciler::class)->incremental(budget: 0);
+
+    // The budget is checked before a workspace is started, and the first one is
+    // always taken: a tick that could not afford a single workspace would never make
+    // progress. Everything after it is reported, not silently dropped.
+    expect($result['workspaces'])->toBe(1)
+        ->and($result['deferred'])->toBeGreaterThanOrEqual(1);
+
+    $complete = app(LifecycleStageReconciler::class)->incremental();
+
+    expect($complete['deferred'])->toBe(0)
+        ->and($complete['workspaces'])->toBeGreaterThanOrEqual(2);
 });
 
 it('survives a tenant id that has no workspace, instead of aborting the sweep', function (): void {
     // A deprovisioned workspace leaves custom_fields rows behind under a tenant id with
     // no workspaces row. Measured on DEV050: the pass threw ModelNotFoundException on the
     // first orphan and every later workspace went uncorrected.
-    $orphan = (string) \Illuminate\Support\Str::ulid();
+    $orphan = (string) Str::ulid();
 
     DB::table('custom_fields')->insert([
-        'id' => (string) \Illuminate\Support\Str::ulid(),
+        'id' => (string) Str::ulid(),
         'tenant_id' => $orphan,
         'entity_type' => 'people',
         'code' => PeopleField::LIFECYCLE_STAGE->value,
