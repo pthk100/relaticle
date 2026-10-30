@@ -635,6 +635,79 @@ still write it inside the write, the guard still refuses a hand edit, and a deri
 change still writes no `activity_log` row.
 
 
+THE MODIFICATION (2026-10-30, part 12) - teardown ends the tenant identity, and an
+                                        absent slug is no longer a success
+------------------------------------------------------------------------------
+Changed: `DELETE /api/v1/workspaces/{slug}` now answers 404 when no workspace
+carries the slug (it answered 200 with `data.deleted: false`), and it ENDS the
+tenant-scoped identity that owned the workspace it deleted instead of leaving the
+row behind.
+
+Reason: two defects in one route, both measured against a container built from this
+branch (platform card t_eec81db2).
+
+(a) "Deleted it" and "there was nothing to delete" answered the same STATUS. The
+fork's own teardown evidence recorded the body faithfully (the platform repo's
+docs/specs/artifacts/tenant-teardown-evidence.md, section 2 step [5], which shows a
+re-delete as `200 {"data":{"slug":"…","deleted":false}}`). A caller checks the
+status, though, so a teardown could not be read back. A repeated teardown stays
+harmless: the second call is the 404, which an idempotent caller reads as "already
+gone".
+
+(b) The workspace went, its owner did not. A platform-provisioned owner is not a
+person: it is the tenant-scoped identity the orchestrator derives from the signup
+(`admin@<slug>.<base domain>`, see ResolveTenantOwner), and it holds a password
+hash, two-factor state, passkeys and federated identity links. Nothing in the
+workspace delete touches it, so it outlived the tenant it was minted for, and a
+later provision of the same slug and address (ResolveTenantOwner is find-or-create
+BY EMAIL) would have adopted it rather than starting from a clean identity. It
+cannot be used to sign in once the workspace is gone (the panel needs a workspace,
+`POST /api/v1/workspaces/{slug}/session` answers 404, and the minted credential dies
+with the workspace's own FK cascade), so this is residue and cross-tenant isolation,
+not an access hole.
+
+Files added:
+  app/Actions/Platform/RetireTenantOwner.php
+      the ONE place the retention decision lives. It deletes the identity through
+      upstream's own DeleteUser (the DeletesUsers contract) when the identity is
+      this tenant's own admin address and holds no other workspace, and otherwise
+      KEEPS the row and returns the reason, which the route reports. The shared
+      platform service user is never deleted. The predicate fails SAFE: if the
+      address convention ever stops matching, the identity is kept and the response
+      says why, so it never deletes the wrong row to keep a promise.
+  tests/Feature/Platform/WorkspaceTeardownTest.php
+
+Files changed:
+  app/Actions/Platform/DeprovisionWorkspace.php
+      captures the owner before the delete, hands it to RetireTenantOwner, and
+      returns the outcome instead of a boolean; a slug with no workspace returns
+      null (which the route turns into the 404) rather than false
+  app/Http/Controllers/Api/V1/WorkspaceDeprovisionController.php
+      404 plus `data.deleted: false` for an absent slug; 200 plus `data.deleted:
+      true` and `data.owner{email, deleted, retained_because}` for a teardown
+
+The response contract, additive where the old one meant something (`data.slug` and
+`data.deleted` keep their meaning):
+
+  200 {"data":{"slug":"<slug>","deleted":true,
+              "owner":{"email":"admin@<slug>.<domain>","deleted":true,
+                       "retained_because":null}}}
+  404 {"message":"No workspace exists under the slug \"<slug>\".",
+       "data":{"slug":"<slug>","deleted":false}}
+
+A caller that maps 404 to "already gone" (the orchestrator's cancel path does)
+keeps working unchanged; a caller that reads `data.deleted` now sees a status that
+agrees with it.
+
+NO UPSTREAM LOGIC WAS ALTERED. Workspace deletion is still upstream's
+DeleteWorkspace, and identity deletion is still upstream's DeleteUser.
+
+No image carries this yet: it is committed on `platform`, and the next build from
+that branch is the one that does (proposed tag :3.6.3-teardown-identity). The
+DEPLOYED BUILDS table below is a record of images that were BUILT, so it gains no
+row for a tag that does not exist yet.
+
+
 DEPLOYED BUILDS — the source commit behind each image tag
 ---------------------------------------------------------
 Every image tag this section maps is a build of THIS repository. The commit named
