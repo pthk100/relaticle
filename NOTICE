@@ -777,14 +777,28 @@ the host, `3.6.3-logout-console-exit` and earlier, correspond to parts 1-6.)
       three hashes). The tree is a `git archive` of 2402bdf78. The image's own copy
       of this NOTICE is the pre-part-11 text, because part 11 was written after the
       build.
+  :3.6.3-teardown-identity               582ae5772  (`platform`)              spot-checked, see below
+      part 12. Not named here when it was built; the deploy that shipped it recorded
+      the measurement in ~/marketing-platform/DEPLOYED-REVISION on DEV050: 3691
+      exported files hash to that commit's tree and 2977 of the files the image
+      carries sha256-match it inside the container, 0 differ. That deploy's Pending
+      row is what :3.6.3-migrate-record fixes.
+  :3.6.3-migrate-record                  0867f99a9  (`platform`)              2977 files, all identical
+      part 13. The tag the running containers use. The build context was a `git
+      archive` of 0867f99a9 (3691 files); the image was built from it on DEV050, and
+      every file the image and that tree share (2977 of them; the rest of the image's
+      80954 files are vendor/, storage/, public/build/ and bootstrap/cache, generated
+      during the build) was compared with `sha256sum -c` inside the running container,
+      exit 0 and no mismatches. The image's own copy of this NOTICE is the build-time
+      text: it carries part 13 and not this row, which was written after the build.
 
 Going from a running container to its source, without asking anyone:
 
   $ docker inspect marketing-platform-relaticle-1 --format '{{.Config.Image}}'
-  ghcr.io/pthk100/relaticle-platform:3.6.3-stage-sweep-2
+  ghcr.io/pthk100/relaticle-platform:3.6.3-migrate-record
   $ git clone https://github.com/pthk100/relaticle.git
-  $ git -C relaticle show 2402bdf78 --stat
-  $ git -C relaticle checkout 2402bdf78 && docker build -t relaticle-local .
+  $ git -C relaticle show 0867f99a9 --stat
+  $ git -C relaticle checkout 0867f99a9 && docker build -t relaticle-local .
 
 The tags are HOST-LOCAL: each was built with `docker build` on the dev host and
 none has been pushed, because no registry credential for `pthk100` exists on that
