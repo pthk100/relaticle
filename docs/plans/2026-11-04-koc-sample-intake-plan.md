@@ -129,23 +129,49 @@ Measured, not assumed:
 
 ### Task 0.1: environment
 
-There is no `.env` in this checkout, so nothing runs yet.
+Verified working on this machine on 2026-11-04, with OrbStack as the Docker engine. Sail is not
+required and `phpredis` is not installed, so `CACHE_STORE` must leave Redis.
 
 ```bash
 cd /Users/ai.parry/dev/relaticle-fork
+
+# 1. database. Trust auth so both .env (postgres/postgres) and the committed
+#    .env.testing (root, empty password) work unmodified.
+docker run -d --name relaticle-pg \
+  -e POSTGRES_DB=relaticle -e POSTGRES_USER=postgres -e POSTGRES_PASSWORD=postgres \
+  -e POSTGRES_HOST_AUTH_METHOD=trust -p 5432:5432 postgres:17-alpine
+docker exec relaticle-pg psql -U postgres -c "CREATE ROLE root LOGIN SUPERUSER;"
+docker exec relaticle-pg psql -U postgres -c "CREATE DATABASE relaticle_testing OWNER root;"
+docker run -d --name relaticle-redis -p 6379:6379 redis:alpine
+
+# 2. env. CACHE_STORE=database because there is no phpredis extension here.
 cp .env.example .env
+# set APP_URL=http://127.0.0.1:8900 and CACHE_STORE=database, then:
 php artisan key:generate
-./vendor/bin/sail up -d
+
+# 3. schema and local logins
 php artisan migrate --force
-php artisan db:show
+php artisan local:seed      # prints one login per billing state, password "password"
+
+# 4. frontend assets, only needed to view pages in a browser
+pnpm install && pnpm build
+php artisan serve --host=127.0.0.1 --port=8900
 ```
 
-Expected: `key:generate` prints `Application key set successfully.`; `migrate` ends with
-`INFO  Nothing to migrate.` on a fresh database or the list of migrations applied; `db:show` prints a
-table beginning `PostgreSQL` with `Database ... Tables ...` counts.
+Expected: `migrate` ends with all 172 migrations `DONE`; `local:seed` prints a table of logins
+(`owner@relaticle.test`, `trial@relaticle.test`, and so on); `serve` answers `GET /` with 200 and
+`GET /app/login` with 200.
 
-If Docker is unavailable on your machine, point `DB_*` at any local PostgreSQL 16+ instance, create
-the database, and run `php artisan migrate --force`. Nothing in this plan depends on Sail.
+Two local gotchas, both measured:
+
+- `composer test:arch` crashes inside `laravel/pao` v1.1.5 under PHP 8.5, because a
+  `stream_filter_remove` warning leaves PHPUnit without a test case on the stack. Bypass it:
+  `PAO_DISABLE=1 php -d memory_limit=1024M vendor/bin/pest tests/Arch --no-tia`. The memory flag is
+  required because the arch reflection exceeds the default 128M, and `php artisan test` spawns a
+  child process that drops `-d`, so call Pest directly.
+- The arch suite currently reports 5 failures and 116 passes on `platform`. They are em-dash
+  violations in platform and Keycloak files dated 16 to 26 October, not caused by this work. Do not
+  read them as your own.
 
 ### Task 0.2: prove the baseline is green before you touch it
 
