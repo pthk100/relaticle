@@ -43,6 +43,9 @@ arch()->preset()->security()->ignoring([
 arch()->preset()
     ->laravel()
     ->ignoring([
+        // An OIDC redirect and callback pair, not a resource controller. Renaming
+        // start and callback to show and store would describe neither.
+        'App\Http\Controllers\Platform\KeycloakFederationController',
         'App\Providers\AppServiceProvider',
         'App\Providers\Filament\AppPanelProvider',
         'Relaticle\Admin\AdminPanelProvider',
@@ -114,6 +117,20 @@ arch('avoid mutation')
     ->classes()
     ->toBeReadonly()
     ->ignoring([
+        // A Socialite provider must extend AbstractProvider, which is not readonly,
+        // and PHP forbids a readonly class extending a non-readonly one.
+        'App\Socialite\KeycloakProvider',
+        // The lifecycle latch is a static depth. PHP forbids static properties on a
+        // readonly class, and the observers that increment it are readonly themselves.
+        'App\Support\LifecycleStage\LifecycleStageProjection',
+        // Holds a static flag that decides whether the guard is running a platform
+        // write; PHP forbids static properties on a readonly class.
+        'App\Support\ConsentMirror\ConsentMirrorGuard',
+        // Caches the resolved surface for one request; the static state is the point.
+        'App\Support\Platform\TenantSurface',
+        // A validation Rule is filled in stages (setData, then validate), so its
+        // instance state is written after construction.
+        'App\Rules\ArrayExistsForWorkspace',
         // Replace laravel/passkeys actions through the container; PHP forbids a
         // readonly class extending a non-readonly one.
         'App\Actions\Passkeys\DeletePasskey',
@@ -191,6 +208,9 @@ arch('avoid inheritance')
     ->classes()
     ->toExtendNothing()
     ->ignoring([
+        // The Socialite driver resolves a provider by subclassing; there is no
+        // composition seam for it.
+        'App\Socialite\KeycloakProvider',
         // Replace laravel/passkeys actions through the container, so they must
         // extend the class they stand in for.
         'App\Actions\Passkeys\DeletePasskey',
@@ -421,7 +441,13 @@ arch('API controllers must depend on actions for write operations')
         'App\Http\Resources',
         'App\Models',
         'App\Queries',
+        // Read only: ConsentMirrorController publishes the protected field codes in
+        // a GET response. The rule names write operations, and this is not one.
+        'App\Support\ConsentMirror\ConsentMirrorGuard',
         'Illuminate',
+        // Global helpers: the clock, the URL builder, and response(). They reach no layer.
+        'now',
+        'url',
         'Knuckles\Scribe',
         'response',
     ]);

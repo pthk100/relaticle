@@ -42,7 +42,7 @@ use Illuminate\Validation\ValidationException;
  * (`LifecycleStageReconciler`) - the guard is the polite refusal, the sweep is the
  * correction. The card requires both.
  */
-final class LifecycleStageGuard
+final readonly class LifecycleStageGuard
 {
     /** @return list<string> */
     public static function protectedCodes(): array

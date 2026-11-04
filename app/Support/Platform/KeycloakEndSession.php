@@ -22,7 +22,7 @@ namespace App\Support\Platform;
  * the browser is sent to the deployment ORIGIN (`/realms/…`, which Caddy mounts),
  * never to the compose-network dial host.
  */
-final class KeycloakEndSession
+final readonly class KeycloakEndSession
 {
     /** Where the callback stashes the id_token + realm for a later sign-out. */
     public const SESSION_KEY = 'platform.keycloak.end_session';

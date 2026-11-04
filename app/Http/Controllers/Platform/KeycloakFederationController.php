@@ -55,7 +55,7 @@ use Laravel\Socialite\Two\InvalidStateException;
  * NOT under `guest` or `auth`: a stale Relaticle session from another tenant
  * must still be switched to the workspace this hand-off names.
  */
-final class KeycloakFederationController
+final readonly class KeycloakFederationController
 {
     /** The session key the START request stashes the workspace slug under. */
     private const SESSION_SLUG_KEY = 'platform.keycloak.workspace_slug';

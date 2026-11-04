@@ -37,7 +37,7 @@ use Illuminate\Support\Facades\Auth;
  * after revoking, it 302s to the realm's end-session URL (RP-initiated logout).
  * Without it the answer is JSON, which is what the orchestrator gets.
  */
-final class LogoutController
+final readonly class LogoutController
 {
     public function __invoke(Request $request): JsonResponse|RedirectResponse
     {

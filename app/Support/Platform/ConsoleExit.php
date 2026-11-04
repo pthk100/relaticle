@@ -46,7 +46,7 @@ use Illuminate\Http\Request;
  * {@see href()} then answers null and the chrome renders nothing at all. Upstream
  * behaviour stays untouched, which is what keeps this fork cheap to rebase.
  */
-final class ConsoleExit
+final readonly class ConsoleExit
 {
     /** The visible word. The arrow is its own glyph in the view. */
     public const string LABEL = 'Console';

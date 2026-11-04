@@ -30,7 +30,7 @@ use Symfony\Component\HttpFoundation\Response;
  * auth pages alone — never to the break-glass broker (`/auth/broker/{token}`),
  * the provisioning API, or a signed-in tenant's `password.confirm` flows.
  */
-final class RedirectPlatformAuthPagesToConsole
+final readonly class RedirectPlatformAuthPagesToConsole
 {
     /** The panel auth pages that exist solely to take a password. */
     private const array AUTH_PAGE_ROUTE_SUFFIXES = [

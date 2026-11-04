@@ -25,7 +25,7 @@ namespace App\Support\Platform;
  * relative value is passed through Laravel's URL generator, which resolves it
  * against the app root (the prefixed one).
  */
-final class PlatformConsole
+final readonly class PlatformConsole
 {
     /** The console front door, or null when this deployment does not declare one. */
     public static function url(): ?string
