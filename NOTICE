@@ -708,6 +708,30 @@ DEPLOYED BUILDS table below is a record of images that were BUILT, so it gains n
 row for a tag that does not exist yet.
 
 
+THE MODIFICATION (2026-11-04, part 13) - a skipped migration records itself
+--------------------------------------------------------------------------
+Changed: `database/migrations/2025_08_12_202409_add_settings_to_custom_field_options_table`
+no longer declares `shouldRun()`, and its `up()` returns early when the column already
+exists. It now RUNS and is recorded on every install where the gate had skipped it.
+
+Reason: the table gains its `settings` column in the migration that CREATES it
+(`2025_02_07_192236_create_custom_fields_table`), so on every install built since that
+file carried the column the gate returned false. Laravel logs a skipped migration as
+SKIPPED and `Migrator::runUp()` does NOT record it, so `php artisan migrate:status`
+reported this row `Pending` on every run, forever, on every such install (measured on
+DEV050 on 2026-11-04: 1 Pending, before and after each deploy). The guard inside `up()`
+is this fork's existing shape for a column that may already be there
+(`2025_04_30_143551`, `2026_06_20_051544`): the migration runs, writes nothing where the
+column is present, and the repository logs it.
+
+No column, index or row changes: `custom_field_options.settings` is the same nullable
+`json` column in the same position before and after (rehearsed on a copy of the host's
+shape, and the install repaired itself through `migrate` alone).
+
+Files modified:
+  database/migrations/2025_08_12_202409_add_settings_to_custom_field_options_table.php
+
+
 DEPLOYED BUILDS — the source commit behind each image tag
 ---------------------------------------------------------
 Every image tag this section maps is a build of THIS repository. The commit named
