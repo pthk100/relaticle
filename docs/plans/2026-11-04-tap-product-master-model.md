@@ -195,12 +195,55 @@ verification gate therefore runs per campaign-product, not once per campaign.
 Marked `unavailable`, never deleted, because a creator may already hold a sample of it and the deal it was part
 of has to remain explainable.
 
-## 10. Still open
+## 10. The selection guard: two factors, and it returns a reason
 
-1. **The "commission/selection threshold" in process rule three is still undefined.** The rule says an extra SKU
-   in the same shop is allowed when the campaign matches *and* the threshold is met; nobody has said what the
-   threshold is, so the guard cannot be coded. A number is needed, not a description.
-2. **Who performs the affiliate-link verification**, and may a BD verify their own campaign? If the same person
-   negotiates and verifies, the check is a formality; if a second person verifies, campaigns queue behind them.
-   This is a role question with a real throughput cost either way.
+Answered by the operator: the threshold in process rule three is a **two-factor guard**, not one number.
+
+| Factor | Column | Rejects when | Why |
+|---|---|---|---|
+| Commercial | commission percentage | below the system baseline (for example under 10.0%) | TikTok restricts promotion mechanics below a floor, and a thin margin does not pay for a creator's video or the agency's cut |
+| Inventory | `minimum_priority_score` (integer) | below the floor | a slow-moving or low-priority SKU breaks fulfilment when it is added to an active campaign |
+
+So the guard is:
+
+```
+add an extra SKU to an existing campaign
+  1. same campaign          product.campaign_id == campaign.id
+  2. same shop              product.shop_id    == campaign.shop_id
+  3. commission             rate >= config.minimum_commission_pct     (default 10.0)
+  4. priority               priority_score >= config.minimum_priority_score
+  5. availability           product is not out of stock
+  => Allow, or Refuse with the failed reasons
+```
+
+Four notes that matter more than the shape:
+
+1. **It returns reasons, never a bare boolean.** A validation that answers `False` produces a support ticket
+   saying "why can't I add this one?", and the person answering has to redo the arithmetic. It returns
+   `Refuse(['commission 8.0% is below the 10.0% floor'])`, so the refusal is readable on the screen that
+   triggered it.
+2. **The commission it checks is the verified rate, not the published one.** A SKU whose link pays 8% while the
+   public listing says 14% passes a published-rate check and fails in reality. If the rate has not been verified
+   yet, the guard refuses with "not verified", because an unverified rate is not a fact (see §9.2).
+3. **`minimum_priority_score` is a proxy for stock, and the file has no stock column.** The sheet's
+   `Priority Score` runs roughly 58 to 89 and is derived from sales and units, not from warehouse quantity. If
+   the real intent is "do not promise an out-of-stock product", a sales-derived score cannot detect it; either an
+   inventory field is added to the master, or the guard's rationale is restated as "low demand", which is what the
+   number actually measures.
+4. **The score is a decimal in the file** (76.9, 88.9, 62.6), so an integer floor silently rounds. Either keep it
+   decimal or state the rounding rule; otherwise two SKUs at 59.4 and 59.6 behave differently for no reason the
+   BD can see.
+
+The guard is one class in `app/Actions/`, the single owner of this rule, called by the add-SKU action, the bulk
+importer and any API path. Enforcement in the form only means the next import bypasses it.
+
+## 11. Still open
+
+1. **The baseline values.** `minimum_commission_pct` and `minimum_priority_score` need numbers, and whether they
+   are per workspace, per brand, or global. A default of 10.0 and a priority floor in the high 50s are plausible
+   from the file's own distribution, but plausible is not decided.
+2. **Does the guard apply to the first SKU in a campaign, or only to extras?** Process rule three is written
+   about extra SKUs in the same shop; applying it only there lets a weak first SKU in by another door.
+3. **Who performs the affiliate-link verification**, and may the BD who negotiated a rate verify it?
+
 
