@@ -76,3 +76,6 @@ test-results.xml
 
 # Pest browser plugin writes a PNG here for every failed assertion
 /tests/Browser/Screenshots
+
+# Agent tool state. Plans worth keeping are committed to docs/plans/ instead.
+/.hermes/
