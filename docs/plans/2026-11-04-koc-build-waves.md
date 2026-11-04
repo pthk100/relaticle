@@ -302,3 +302,29 @@ Still blocked on inputs, not on design:
 - confirmation of whether **Kalodata** exposes an API on the subscription, which decides client versus parser
   but changes nothing above the interface.
 
+---
+
+## 14. Revised on 2026-11-04 after reading the two working files
+
+Three corrections, all from operator input or from the files themselves. Detail in
+`docs/plans/2026-11-04-tap-product-master-model.md`.
+
+**Wave 2C is not a catalogue import.** The product sheet is a sourcing pipeline, not a SKU list: shops,
+campaigns, products, the campaign-product join with a per-SKU brand status, versioned commission snapshots,
+contact channels and BD decisions. Its importer is a parser with a rejection report, because the same cell holds
+up to eight campaign ids, three shop names, or a price range.
+
+**Two BD owners, not one.** `creator_bd_owner_id` on the creator and `brand_bd_owner_id` on the brand or shop.
+The same person may hold both, which is how the current team covers creator outreach when it needs hands. A
+merged column cannot answer "who owns the brand relationship" once two people share the work.
+
+**`2B` is an importer of collected data, not a client.** Kalodata sells no API at this tier and the data is
+gathered by agents from the subscription, so every import carries `collected_by`, `collected_at`,
+`subscription_tier` and its source file. There is no rate limit to schedule against; the cadence is collection.
+
+One addition that touches the creator side, and it is the kind of bug that costs money: **the opportunity must
+copy the commission in force at agreement time, not reference the campaign's live rate.** The product file shows
+the rate changing (Partner Centre 10%, agreed 20%, change pending), so a foreign key to a mutable rate is not a
+record of what was agreed. Add this to `1D` and to the Partner Centre stream.
+
+

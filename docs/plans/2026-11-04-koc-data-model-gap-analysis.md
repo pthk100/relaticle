@@ -269,11 +269,19 @@ A reversal writes an audit entry with actor, reason and timestamp, and the guard
 hidden UI path. This matches the decision already recorded in commit `34e71e3`; the registry work must reuse
 it rather than invent a second scheme.
 
-### 9.5 Kalodata is a paid subscription, API unconfirmed
+### 9.5 Kalodata has no API; the data arrives by collection
 
-So `2B` is built exactly like the Partner Centre client: an interface, a fake, and the tests run against the
-fake. Whether the real implementation is an HTTP client or a parser of exported files is **deferred**, and the
-interface must not assume either. The one thing that is certain is the normalised fact shape in §6.
+Confirmed by the operator: Kalodata sells no API at this tier because it is too expensive, and the data is
+gathered by agents working the paid subscription. That settles the deferral in the opposite direction to a
+client:
+
+- `2B` is an **importer of collected output**, not a live client. The interface still exists, because the shape
+  of a later API would be the same, but the real implementation reads files.
+- Every import carries `collected_by`, `collected_at`, `subscription_tier` and the file it came from, because
+  "which person pulled this" is the only audit trail a scraped source can have.
+- There is no "refresh cadence" to schedule against a rate limit. The cadence is **collection**, and the
+  importer is idempotent per `(koc_id, source, period_end)` so a re-import replaces rather than duplicates.
+- The measurement window comes from the collector, not from us. It is recorded, never recomputed.
 
 ### 9.6 The refresh cadence is configuration, daily by default
 
@@ -281,14 +289,22 @@ interface must not assume either. The one thing that is certain is the normalise
 `(koc_id, source, period_end)` so a manual re-run replaces instead of duplicating. The cadence is set where
 the subscription's rate limit can be seen, not hard-coded in the job.
 
-### 9.7 BD owner is a Thailand staff member with a dual remit
+### 9.7 BD owner is two roles, not one
 
-The BD owner reaches out to brands to secure products **and** to creators to bring them in. Two consequences:
+Corrected by the operator: **brand BD and creator BD are separate jobs today**, and the same person may cover
+both when creator outreach needs more hands. So:
 
-1. It is `account_owner_id`, a real user in the workspace, never free text, because the same person has to be
-   filtered by on both a creator and a brand.
-2. Both `creators` and the brand-side company carry it, so "what is Nok working on" is one query rather than
-   two lists that drift.
+| Field | On | Meaning |
+|---|---|---|
+| `creator_bd_owner_id` | `creators` | who brings the creator in |
+| `brand_bd_owner_id` | the brand-side company | who secures products and commissions from the brand |
+
+Both are real workspace users, never free text, and both are filterable. The overlap is expressed by one person
+holding both fields, **not** by merging them into one column: a merged column cannot answer "who owns the brand
+relationship" once two people share the work, which is exactly the change the operator expects.
+
+A brand BD assisting on a creator is a reassignment with an audit entry, not a second silent owner. Two owners
+on one record with no rule about which is authoritative is the failure mode this decision avoids.
 
 ### 9.8 The multi-brand product master is coming, and it is a fourth source
 
