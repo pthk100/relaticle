@@ -132,17 +132,75 @@ cheaper now than after deals exist.
 **Two BD owners, per §9.7 of the gap analysis.** `brand_bd_owner_id` on the brand or shop, `creator_bd_owner_id`
 on the creator, and one person may hold both.
 
-## 9. Open questions
+## 9. The answers, and the two definitions they fix
 
-1. **Is a campaign ever shared across brands?** The pet campaign spans three Pethealer shops, which suggests one
-   seller may own several shops. If a campaign can span different brands, `campaign.brand_id` is wrong and the
-   brand lives on the shop instead.
-2. **Who owns the commission number of record** when Partner Centre, the brief and the BD note disagree? The file
-   shows all three. Recommendation: `agreed` wins for paying, `partner_centre` wins for reporting, and the
-   difference is surfaced rather than resolved.
-3. **What is the selection threshold** in rule three (the "commission/selection threshold")? It is referenced and
-   never defined, so it cannot be coded.
-4. **Do product-level commission overrides exist**, or is commission always per campaign? The file is consistent
-   per campaign, but the schema should answer this before it is needed.
-5. **What happens to a product that disappears from Open Products** (`未找到 / Not found`)? Retire the row, or keep
-   it historical? Recommendation: keep it, marked unavailable, because a creator may already hold a sample of it.
+### 9.1 The opportunity is a KOC × brand match, and the campaign is not the brand
+
+Corrected by the operator: **an opportunity is one commercial match between a single KOC and a single
+brand or product line.** If a KOC sells Brand A well and Brand B also fits, that is a **new campaign** and a
+**second opportunity**, and the creator may eventually carry both.
+
+That means the brand does not live on the campaign:
+
+| Entity | Carries the brand? |
+|---|---|
+| `shops` | **yes** (`brand_id`), because a seller can run several shops for one brand |
+| `products` | **yes**, inherited from the shop and overridable |
+| `campaigns` | **no**, because the file already shows one agency campaign id, `7701938009231410950`, spanning both `Oritina-TH` and `MINISO TH Shop`, which are different brands |
+| `opportunities` | **yes**, and it is the only place that binds one KOC to one brand or product line |
+
+So `campaigns` reaches brands through `campaign_shops`, never through a `brand_id` column. A campaign is a
+TikTok-side grouping that may span shops and brands; the opportunity is our commercial record.
+
+### 9.2 Commission is negotiated, and the number of record is the one on the link we verified
+
+The public TikTok rate is a **starting position**, not a term. The operator's account: a published rate is never
+take it or leave it, particularly for an MCN with a selling record. Once a rate is agreed the brand configures
+the affiliate link at that percentage, and we **check it before starting work**.
+
+So three numbers exist, and they are not the same fact:
+
+| Number | Source | Role |
+|---|---|---|
+| `published_pct` | Partner Centre, as offered | the opening position; never a term |
+| `negotiated_pct` | the BD's agreement with the brand | what we believe we will be paid |
+| `verified_pct` | the configured affiliate link, read by us | **the number of record**, because it is what TikTok will actually pay |
+
+And the gate that follows, which is the whole point of the answer:
+
+```
+published  ->  negotiated  ->  link configured  ->  VERIFIED  ->  work may start
+```
+
+- A campaign may not move to `ready_to_sell`, and a creator may not be briefed or sampled, until
+  `verified_pct` has been recorded against it.
+- Each verification stores `verified_at`, `verified_by`, the affiliate link or campaign URL that was read, and
+  the percentage seen. A verification without the artefact it was read from is a rumour.
+- If `verified_pct` differs from `negotiated_pct`, that is a **blocked campaign with a reason**, escalated to the
+  brand. It is never silently accepted, and it is never averaged.
+- `verified_pct` supersedes both other numbers for payment, because it is the only one that pays.
+
+This is the same shape as the earlier rule about copying the commission onto the deal: the opportunity stores
+`verified_pct` **at agreement time**, plus the snapshot id it came from, so a later change to the campaign cannot
+reprice a deal that already exists.
+
+### 9.3 Product-level overrides exist, because the link is configured per product
+
+The commission is configured on the affiliate link, and links are per product or product line, so the override
+lives on `campaign_products` and a campaign-wide rate is the default rather than the only value. The
+verification gate therefore runs per campaign-product, not once per campaign.
+
+### 9.4 A product that disappears from Open Products is retained
+
+Marked `unavailable`, never deleted, because a creator may already hold a sample of it and the deal it was part
+of has to remain explainable.
+
+## 10. Still open
+
+1. **The "commission/selection threshold" in process rule three is still undefined.** The rule says an extra SKU
+   in the same shop is allowed when the campaign matches *and* the threshold is met; nobody has said what the
+   threshold is, so the guard cannot be coded. A number is needed, not a description.
+2. **Who performs the affiliate-link verification**, and may a BD verify their own campaign? If the same person
+   negotiates and verifies, the check is a formality; if a second person verifies, campaigns queue behind them.
+   This is a role question with a real throughput cost either way.
+
