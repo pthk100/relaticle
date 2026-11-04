@@ -123,8 +123,8 @@ Measured, not assumed:
 | Branch topology | `origin/main` is an ancestor of `platform`; `platform` is 28 commits ahead of `main`. Deploy from `platform`, never from `main` |
 | Host DEV050 | reachable on `console-uat.xgate.com:22050` only, from public IP `58.136.167.201`. Ports 80 and 443 for both console hostnames time out from outside, so the panel is browsed through an SSH tunnel, not a URL |
 | Host runtime | every `marketing-platform-*` container up, `relaticle` healthy for 6 days, root disk 208G of 9T used |
-| Deployed code | the container's tree is **byte-identical to local HEAD** on five sampled files including the newest migration, and `migrate:status` shows the newest migration as `Ran` |
-| Host provenance | `~/marketing-platform/DEPLOYED-REVISION` is **wrong**: it records `revision=3f9dcbc3` on `branch=main`, but that commit does not exist anywhere on the remote, and `main` is 28 commits behind what is actually running. Do not use it to decide what is deployed |
+| Deployed code | the container is at commit **2402bdf78**, two commits behind local HEAD. `f9740931d` (NOTICE) and `96460aa92` (tenant teardown) are not on the host, and `RetireTenantOwner.php`, which HEAD adds, is absent. Schema is not behind: the newest migration is on both sides and shows `Ran` |
+| Host provenance | `~/marketing-platform/DEPLOYED-REVISION` used to record `revision=3f9dcbc3` on `branch=main`, a commit that exists nowhere on the remote. It now records `2402bdf78` on `platform`, established by comparing file contents, not by trusting the old value |
 | Panel addresses | the CRM listens on host `127.0.0.1:3002` and redirects to `https://console-crm-uat.xgate.com/crm/`. Port 8080 is the Keycloak admin console, not this app |
 
 ### Task 0.1: environment
