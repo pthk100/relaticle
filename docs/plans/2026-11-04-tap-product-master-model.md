@@ -286,5 +286,33 @@ Because the same person negotiates and verifies, the artefact is the control. A 
 behind it is not a verification, and the commercial lead should be able to audit a sample of them without asking
 anyone what happened.
 
+## 12. Words: brand, product line, plan, opportunity
+
+The operator's correction: **"campaign" implies a limited time frame, and the selling is not limited.** If a
+product sells, the creator keeps selling it. A TikTok plan expiring does not end the relationship, the rate, or
+the revenue.
+
+So four names, four lifetimes, and only one of them is dated:
+
+| Name | What it is | Lifetime |
+|---|---|---|
+| **Brand** | the commercial counterparty that agrees the rate | until we stop working with them |
+| **Product line** | a brand's line of products that share a rate, for example Oritina · Skincare | indefinite; the durable container |
+| **TikTok campaign** | TikTok's own dated artefact (定向计划, a targeted plan), with a start and end date | bounded, and may expire while everything else continues |
+| **Opportunity** | one creator matched to one product line | indefinite, with no end date |
+
+Two consequences that reach the screens and the schema:
+
+1. **The rate hangs on the product line, not on the campaign.** A campaign ending is an event on the line, not the
+   end of the line. When TikTok's plan window closes and the creator keeps selling, nothing in our model has to be
+   recreated.
+2. **The opportunity is durable; the work is cyclical.** A relationship holds many cycles of *sample → post →
+   result*. The five-step funnel that ends at "commission paid" was wrong, because commission paid is not a
+   terminal state: the creator goes again. The opportunity keeps a state (active, paused, ended) and its cycles
+   carry the dates.
+
+`campaign` survives only where TikTok uses the word: the imported campaign row, which keeps `starts_on` and
+`ends_on`. It is never the spine of a screen or a foreign key that a creator's work hangs from.
+
 
 
