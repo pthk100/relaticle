@@ -154,9 +154,10 @@ TikTok-side grouping that may span shops and brands; the opportunity is our comm
 
 ### 9.2 Commission is negotiated, and the number of record is the one on the link we verified
 
-The public TikTok rate is a **starting position**, not a term. The operator's account: a published rate is never
-take it or leave it, particularly for an MCN with a selling record. Once a rate is agreed the brand configures
-the affiliate link at that percentage, and we **check it before starting work**.
+The public TikTok rate is a **starting position**, not a term, and the operator is explicit that it is often
+simply wrong: every rate is negotiated case by case, and where the agency is confident of volume it can reach
+50% or more depending on the brand. The published listing therefore has no evidentiary value at all beyond "a
+conversation is possible".
 
 So three numbers exist, and they are not the same fact:
 
@@ -237,13 +238,53 @@ Four notes that matter more than the shape:
 The guard is one class in `app/Actions/`, the single owner of this rule, called by the add-SKU action, the bulk
 importer and any API path. Enforcement in the form only means the next import bypasses it.
 
-## 11. Still open
+## 11. The baseline is per campaign, and extras-only is provisional
 
-1. **The baseline values.** `minimum_commission_pct` and `minimum_priority_score` need numbers, and whether they
-   are per workspace, per brand, or global. A default of 10.0 and a priority floor in the high 50s are plausible
-   from the file's own distribution, but plausible is not decided.
-2. **Does the guard apply to the first SKU in a campaign, or only to extras?** Process rule three is written
-   about extra SKUs in the same shop; applying it only there lets a weak first SKU in by another door.
-3. **Who performs the affiliate-link verification**, and may the BD who negotiated a rate verify it?
+### 11.1 The commission floor is not one global number
+
+Because every rate is negotiated and the published listing is unreliable, a single workspace-wide floor such as
+10% is only a **viability** test, not the real selection test. The question the guard should actually answer is
+"does this extra SKU dilute the campaign it is joining?", and the answer is a comparison with the campaign's own
+rate:
+
+```
+effective_floor = max( workspace.minimum_commission_pct , campaign.verified_pct )
+
+refuse when  candidate.verified_pct < effective_floor
+```
+
+Two tests, two purposes, both needed:
+
+| Test | Threshold | Rejects |
+|---|---|---|
+| Viability | workspace floor (10% today) | a SKU too thin to pay for a creator's video or the agency's cut |
+| Dilution | the campaign's own verified rate | a 10% SKU added to a campaign already paying 30%, which spends the creator's time on the worse product |
+
+A workspace-wide 30% floor would be wrong for a brand whose whole catalogue sits at 12%, which is exactly what
+the operator described: rates are negotiated per brand, sometimes far above the list.
+
+### 11.2 The guard applies to extras only, for now
+
+Confirmed by the operator, with a note to re-check later. Recorded here as **provisional**, because the
+consequence is that a weak first SKU enters a campaign through a door the guard does not watch:
+
+> **Revisit before Wave 2C ships.** Decide whether the same guard applies to the first SKU. Until then the guard
+> is scoped to `add extra SKU to an existing campaign` and the first SKU is a BD judgement.
+
+### 11.3 The BD who receives the link verifies it
+
+The verification in §9.2 is performed by the BD who obtained the affiliate link from the brand. That is a
+single-person check with no second pair of eyes, which is an accepted throughput trade, and it is only honest if
+the evidence is captured:
+
+- the link or campaign URL that was read,
+- the percentage seen on it,
+- `verified_by` and `verified_at`,
+- and, for a mismatch, the brand conversation reference.
+
+Because the same person negotiates and verifies, the artefact is the control. A verification row with no link
+behind it is not a verification, and the commercial lead should be able to audit a sample of them without asking
+anyone what happened.
+
 
 
