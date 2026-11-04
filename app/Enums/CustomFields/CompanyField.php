@@ -25,12 +25,24 @@ enum CompanyField: string
      */
     case LINKEDIN = 'linkedin';
 
+    /**
+     * Brand code: Stable code the product master and affiliate links use for this brand
+     */
+    case BRAND_CODE = 'brand_code';
+
+    /**
+     * Category: How the MCN team files the brand
+     */
+    case CATEGORY = 'category';
+
     public function getDisplayName(): string
     {
         return match ($this) {
             self::ICP => 'ICP',
             self::DOMAINS => 'Domains',
             self::LINKEDIN => 'LinkedIn',
+            self::BRAND_CODE => 'Brand code',
+            self::CATEGORY => 'Category',
         };
     }
 
@@ -40,6 +52,7 @@ enum CompanyField: string
             self::ICP => CustomFieldType::TOGGLE->value,
             self::DOMAINS => CustomFieldType::DOMAIN->value,
             self::LINKEDIN => CustomFieldType::LINK->value,
+            self::BRAND_CODE, self::CATEGORY => CustomFieldType::TEXT->value,
         };
     }
 
@@ -65,6 +78,8 @@ enum CompanyField: string
             self::ICP => 'Indicates whether this company is an Ideal Customer Profile',
             self::DOMAINS => 'Website domains of the company (e.g., example.com)',
             self::LINKEDIN => 'URL to the company\'s LinkedIn profile',
+            self::BRAND_CODE => 'Stable code the product master and affiliate links use for this brand',
+            self::CATEGORY => 'How the MCN team files the brand',
         };
     }
 
