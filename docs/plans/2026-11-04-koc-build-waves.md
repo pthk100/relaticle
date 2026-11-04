@@ -261,3 +261,44 @@ and why, which files you wanted to edit but did not own, and anything the plan g
 | `campaign` and `skus` option values | `1A` renders `Pending catalog` and `sku-default` placeholders | needs a settings screen before launch; not this wave |
 | Consent mirroring | the application stores evidence only | keep it evidence-only; agreeing to be contacted about one application is not marketing opt-in |
 | Sample status replies | out of scope here | OA push costs message quota; the acknowledgement copy is already static |
+
+---
+
+## 13. Locked on 2026-11-04, and the waves this document is missing
+
+The operator answered the open questions. The full reasoning is in
+`docs/plans/2026-11-04-koc-data-model-gap-analysis.md` §9; what matters here is that these are now
+**constraints, not choices**, and the wave list grows by four:
+
+| New item | Repo | Depends on | Owns |
+|---|---|---|---|
+| **Wave 0c** Creator Registry and profile fields | relaticle-fork | nothing | `creators` table and model, `creator_merges`, the `PeopleField` additions, `people.creator_id`, the backfill migration |
+| **Wave 0d** the master sheet importer | relaticle-fork | 0c, 1D | one command that reads the working sheet into creators, people and cooperations |
+| **Wave 1D** cooperation and fulfilment | relaticle-fork | 0c | `cooperations` table, the six delivery states, the two blacklist flags and their policy guards, tracking number |
+| **Wave 2C** the multi-brand product master | marketing-platform | the file from TikTok Partner | brand and SKU ingest, its own sync key, the console surface |
+
+Constraints every stream inherits:
+
+1. **`KOC_ID` is `creators.id`, a ULID, issued by the registry.** Never `people.id`, and never the handle. A
+   creator may exist with no person row, because Kalodata sees creators before we contact them.
+2. **Money comes from Partner Centre only.** A Kalodata figure may be shown as context and may never fill a
+   missing commercial number. Every money field carries `source`, and a single unlabelled "GMV" is a bug.
+3. **`audience_locked` is a boolean on the audience fact row.** When false, the audience columns are absent and
+   the console says so; they are never rendered as zero.
+4. **Two blacklist flags, two different authorities.** `blacklisted_sample` is cleared by a rep with a reason;
+   `blacklisted_brand_risk` by the commercial lead only. Reuse the decision in commit `34e71e3`.
+5. **Kalodata is behind an interface with a fake**, exactly like Partner Centre, because the API is unconfirmed.
+6. **Refresh cadence is configurable, daily by default**, and the tick is idempotent per
+   `(koc_id, source, period_end)`.
+7. **BD owner is `account_owner_id`, a workspace user**, on both the creator and the brand.
+
+Wave 0 is therefore larger than §3 says: it now includes the registry, which everything downstream keys on.
+That makes Wave 0 the critical path and no longer a short one. Split it if a single subagent cannot hold it:
+`0a` schema and model, `0b` registry, with `0a` first because the tables reference `creators.id`.
+
+Still blocked on inputs, not on design:
+
+- the **product master file** from TikTok Partner, for Wave 2C and for the real `campaign`/`skus` options;
+- confirmation of whether **Kalodata** exposes an API on the subscription, which decides client versus parser
+  but changes nothing above the interface.
+

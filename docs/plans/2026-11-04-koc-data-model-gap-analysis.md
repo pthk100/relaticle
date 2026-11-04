@@ -186,7 +186,7 @@ with anything in relaticle-fork.
 
 ---
 
-## 8. Decisions needed before any of this is built
+## 8. Decisions asked on 2026-11-04, answered in §9
 
 1. **Is `koc_id` the person ULID, or a separate creator registry?** Recommendation: the person ULID. Two
    identity schemes for one human is the expensive mistake, and `person_key_map` already exists to hold
@@ -199,3 +199,107 @@ with anything in relaticle-fork.
 5. **Kalodata access.** Is it a subscription with an API, or scraped? That decides whether Wave 2B is a client
    or a parser, and it is the one item that could be blocked for a reason outside the code.
 6. **Refresh cadence.** Daily is plausible for 30-day metrics; hourly is pointless and doubles Doris load.
+
+---
+
+## 9. The answers, and what each one changes
+
+Answered by the operator on 2026-11-04. Each answer below is a constraint a subagent must be able to apply
+without asking again.
+
+### 9.1 `KOC_ID` comes from a central Creator Registry, as a ULID
+
+This overturns §8.1's recommendation, and the operator's version is better for a reason worth writing down:
+**a creator exists in the analytics layer before they exist in the CRM.** Kalodata returns a creator we have
+never contacted, and Partner Centre will surface more. If the key were `people.id`, every scraped creator
+would need a CRM person row to get an ID, which fills the CRM with records nobody owns.
+
+So the registry is its own table and it issues the key:
+
+| Table | Key | Rule |
+|---|---|---|
+| `creators` | `id` ULID, this **is** `KOC_ID` | one row per human creator, created by whoever sees them first, whether that is a sample application, a Partner Centre lookup or a Kalodata import |
+| `people` | `id` ULID | the CRM person, optional `creator_id` unique foreign key |
+| `creator_merges` | | `from_creator_id` to `to_creator_id`, why, and by whom |
+
+Rules that make this safe, and each one prevents a specific failure:
+
+1. **`creators.handle` is an attribute, never the key.** Handles change; the sheet already carries a case
+   where the LINE ID and the TikTok handle differ.
+2. **Exactly one row per human.** A merge is an explicit record, never a delete, and every fact row keeps
+   pointing at the surviving id after the merge is applied by the ETL.
+3. **A creator row carries no CRM relationship.** Notes, tasks, opportunities and activity hang off the
+   person. The registry holds identity only: handle, profile URL, tier, MCN, mcn_signed, cohort,
+   contact_source, profile artifact links.
+4. **Onboarding is the only direction.** A person is created from a creator, never the reverse, so the
+   registry never has to guess a person.
+
+Doris then keys on `koc_id`, in a new `creator_dim` plus fact tables, and leaves `person_profile` alone: that
+table answers questions about CRM activity, which is a different subject from creator performance.
+
+### 9.2 `audience_locked` is a boolean, and it is a paywall artefact
+
+Stored as `boolean` on the audience fact row, not on the creator. It answers "did this tier include audience
+data for this pull", which is a property of the measurement, not of the human. Consequence: when it is false,
+the audience columns are **absent, not zero**, and the console says "not included in this subscription tier"
+rather than rendering an empty chart.
+
+### 9.3 Partner Centre is the source of truth for money; Kalodata is intelligence only
+
+This is the strongest of the six answers and it needs to be enforced in the schema, not just documented:
+
+- Every money field carries `source`, and only `source = partner_centre` may feed a commercial figure:
+  commission, opportunity amount, payout, anything a person is paid on.
+- Kalodata figures are **context**: they may be shown, compared, or used to pick who to approach. They may
+  never be summed into a commercial total, and they are never used to fill a gap where Partner Centre has no
+  number. A missing Partner Centre figure renders as "not reported", never as a Kalodata estimate.
+- The console must label the two differently on the same screen. A single number labelled "GMV" after this
+  decision is a bug, because it hides which store it came from.
+
+### 9.4 Reversing a blacklist is a role, not a button
+
+Two flags, not one, and the reversible one is not the dangerous one:
+
+| Flag | Blocks | Who may clear it |
+|---|---|---|
+| `blacklisted_sample` (took the sample, never posted) | another sample dispatch | a rep, with a reason, which is recorded |
+| `blacklisted_brand_risk` (fake followers, controversy) | any contact at all | the commercial lead only |
+
+A reversal writes an audit entry with actor, reason and timestamp, and the guard is a policy check, not a
+hidden UI path. This matches the decision already recorded in commit `34e71e3`; the registry work must reuse
+it rather than invent a second scheme.
+
+### 9.5 Kalodata is a paid subscription, API unconfirmed
+
+So `2B` is built exactly like the Partner Centre client: an interface, a fake, and the tests run against the
+fake. Whether the real implementation is an HTTP client or a parser of exported files is **deferred**, and the
+interface must not assume either. The one thing that is certain is the normalised fact shape in §6.
+
+### 9.6 The refresh cadence is configuration, daily by default
+
+`analytics.creator_refresh_cron` (or the equivalent) with a daily default, and the tick is idempotent per
+`(koc_id, source, period_end)` so a manual re-run replaces instead of duplicating. The cadence is set where
+the subscription's rate limit can be seen, not hard-coded in the job.
+
+### 9.7 BD owner is a Thailand staff member with a dual remit
+
+The BD owner reaches out to brands to secure products **and** to creators to bring them in. Two consequences:
+
+1. It is `account_owner_id`, a real user in the workspace, never free text, because the same person has to be
+   filtered by on both a creator and a brand.
+2. Both `creators` and the brand-side company carry it, so "what is Nok working on" is one query rather than
+   two lists that drift.
+
+### 9.8 The multi-brand product master is coming, and it is a fourth source
+
+Promised from TikTok Partner shortly. It changes two things:
+
+- `campaign` and `skus` on the sample form stop being placeholders and reference real catalog rows. The form
+  must store a catalog key plus a snapshot of the label, so a later catalogue edit does not silently relabel an
+  old application.
+- It adds **Wave 2C**: an ingest for brands and SKUs, with its own sync key, feeding the same console. It is a
+  fourth source beside Partner Centre and Kalodata, and it is the only one of the four that is a *product*
+  master rather than a *party* master.
+
+Until the file arrives, `1A` keeps its two placeholder options and the column is `catalog_key` nullable.
+
