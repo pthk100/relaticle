@@ -35,10 +35,20 @@ Shop`, `SOLMET TH`). One brand can operate several shops, and the file treats th
 commission and campaigns differ per shop. A shop exists before any campaign: the `(no campaign)` rows are
 prospects with contact channels only.
 
-**`campaigns`** is the affiliate campaign: a 19-digit `campaign_id`, a name that is Thai, Chinese or English on
-the same sheet, a collab link, a deadline buried in the notes, and commission terms. **A campaign can span
-several shops** (`Pethealer-0371, Pethealer-Thailand, Pethealer.shop` share one campaign name) and one shop
-appears under several campaigns, so this is many-to-many in both directions.
+**`campaigns`** is the affiliate collaboration (TikTok's 定向计划): a 19-digit `campaign_id`, a name that is
+Thai, Chinese or English on the same sheet, a collab link, commission terms, and **two independent windows,
+not one deadline**:
+
+- `registration_ends_at` is the **entry gate**. After it a seller can no longer apply or register new items
+  to the plan. Every item approved before that instant moves forward into the active pipeline regardless.
+- `active_ends_at` is the **parameter expiry**. After it the plan's target commission reverts, its product
+  links change status, and the creator's exclusive authorisation for that plan concludes.
+
+Confirmed by TikTok rather than inferred from the sheet's notes. One `ends_at` column cannot hold this: a
+plan whose gate closed last week is still running, and a plan whose parameters expired still keeps every
+item it admitted. **A campaign can span several shops** (`Pethealer-0371, Pethealer-Thailand, Pethealer.shop`
+share one campaign name) and one shop appears under several campaigns, so this is many-to-many in both
+directions.
 
 **`products`** is the SKU: 19-digit product id, title, price in THB, rating, cumulative sold, free-sample
 availability, and the TikTok product link.
@@ -74,6 +84,17 @@ And the rule that follows from it, which is the correction this document exists 
 
 The file already demonstrates the failure: paying a creator on today's rate would pay 10% where the agreement was
 20%, or the reverse. A foreign key to a mutable rate is not a record of what was agreed.
+
+**A target rate expires by design.** TikTok's second window ends the special parameters: the target commission
+reverts. So a snapshot is only meaningful with the window it belongs to, and the applicable rate on a given date
+is the target while the active window is open and the open/standard rate after it. Two rules follow:
+
+- Never store `targeted_pct` as "the commission". It is the commission **between two dates**, and a screen that
+  prints it without the window is printing half the rule, the same way the 20% floor is only half a rule without
+  its reason.
+- An opportunity's agreed rate never silently inherits a target that has reverted. The agreed number was fixed at
+  agreement time against a window; when the window closes, the opportunity keeps what was agreed and the line
+  reverts to standard. If the creator keeps selling, the money changes, not the record.
 
 ## 4. The four rules in the `Process rules (Coy)` cell are application logic
 
@@ -298,14 +319,16 @@ So four names, four lifetimes, and only one of them is dated:
 |---|---|---|
 | **Brand** | the commercial counterparty that agrees the rate | until we stop working with them |
 | **Product line** | a brand's line of products that share a rate, for example Oritina · Skincare | indefinite; the durable container |
-| **TikTok campaign** | TikTok's own dated artefact (定向计划, a targeted plan), with a start and end date | bounded, and may expire while everything else continues |
+| **TikTok collaboration** (定向计划) | TikTok's own artefact with **two** windows: the registration gate, then the active window. After the gate no new items may be added; after the active window the target rate reverts, the links change status and the creator's exclusivity concludes | each window is bounded; the approved items and the relationship outlive both |
 | **Opportunity** | one creator matched to one product line | indefinite, with no end date |
 
 Two consequences that reach the screens and the schema:
 
 1. **The rate hangs on the product line, not on the campaign.** A campaign ending is an event on the line, not the
    end of the line. When TikTok's plan window closes and the creator keeps selling, nothing in our model has to be
-   recreated.
+   recreated. What does change is the *target* rate, which reverts to standard at the active window's end: the two
+   clocks are recorded separately because the gate closing changes what we may add, while the window closing
+   changes what we earn.
 2. **The opportunity is durable; the work is cyclical.** A relationship holds many cycles of *sample → post →
    result*. The five-step funnel that ends at "commission paid" was wrong, because commission paid is not a
    terminal state: the creator goes again. The opportunity keeps a state (active, paused, ended) and its cycles
