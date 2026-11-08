@@ -747,7 +747,7 @@ Files modified:
       brandName() no longer reads the bound workspace: it returns
       config('app.name') for every session, and the deployment sets that to
       XGATE. New consoleBrand() keeps the workspace name for the ONE surface that
-      is per-tenant — the `← Console` control (part 6), whose accessible name has
+      is per-tenant: the `← Console` control (part 6), whose accessible name has
       to say where the link goes.
   app/Providers/Filament/AppPanelProvider.php
       brandLogo is null for every session, not only a tenant's. The two logo views
@@ -769,8 +769,8 @@ Files modified:
 
 In the PLATFORM repository (not this one): `docker-compose.yml` sets
 `APP_NAME: XGATE` on the `relaticle`, `relaticle-worker` and `relaticle-scheduler`
-services. The image does not cache config at build time — serversideup's
-`AUTORUN_LARAVEL_CONFIG_CACHE` runs at container start — so the value is read from
+services. The image does not cache config at build time: serversideup's
+`AUTORUN_LARAVEL_CONFIG_CACHE` runs at container start, so the value is read from
 the environment.
 
 NOTHING ELSE CHANGED. isTenantSession() and tenantRealm() keep their jobs: the
