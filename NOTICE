@@ -837,14 +837,23 @@ the host, `3.6.3-logout-console-exit` and earlier, correspond to parts 1-6.)
       during the build) was compared with `sha256sum -c` inside the running container,
       exit 0 and no mismatches. The image's own copy of this NOTICE is the build-time
       text: it carries part 13 and not this row, which was written after the build.
+  :3.6.3-xgate-brand                     6940c157b  (`platform`)              spot-checked, see below
+      part 14. The tag the running containers use. The build context was a `git
+      archive` of 6940c157b (3697 files, directories excluded), built on DEV050. The
+      files this part touches were sha256-compared inside the running container
+      against that commit, all identical: TenantSurface.php, ConsoleExit.php,
+      AppPanelProvider.php, BrandColors.php and NOTICE. `tests/` is not in the image
+      (the build excludes it), so the two test files carry no comparison. The image's
+      own copy of this NOTICE is the build-time text: it carries part 14 and not this
+      row.
 
 Going from a running container to its source, without asking anyone:
 
   $ docker inspect marketing-platform-relaticle-1 --format '{{.Config.Image}}'
-  ghcr.io/pthk100/relaticle-platform:3.6.3-migrate-record
+  ghcr.io/pthk100/relaticle-platform:3.6.3-xgate-brand
   $ git clone https://github.com/pthk100/relaticle.git
-  $ git -C relaticle show 0867f99a9 --stat
-  $ git -C relaticle checkout 0867f99a9 && docker build -t relaticle-local .
+  $ git -C relaticle show 6940c157b --stat
+  $ git -C relaticle checkout 6940c157b && docker build -t relaticle-local .
 
 The tags are HOST-LOCAL: each was built with `docker build` on the dev host and
 none has been pushed, because no registry credential for `pthk100` exists on that
