@@ -328,19 +328,16 @@ final class AppPanelProvider extends PanelProvider
     }
 
     /**
-     * WHOSE NAME THIS DEPLOYMENT CARRIES.
+     * THE ONE NAME THIS DEPLOYMENT CARRIES.
      *
-     * One Relaticle serves every tenant behind the reseller's own domains, so the
-     * product mark names the wrong party on a tenant's surface: a federated tenant
-     * session renders ITS workspace name (TenantSurface::brandName) while every
-     * other caller keeps the deployment's own name. Both answers are Closures
-     * because neither exists when the panel is built: the tenant is bound by
-     * middleware, and the brand is read at RENDER time (the <title>, the sidebar
-     * logo and the footer all ask for it).
+     * The CRM module is XGATE-branded for every tenant while the surrounding
+     * console carries the tenant's own brand (`design/DECISIONS.md`, freeze
+     * question (c)). A Closure because the brand is read at RENDER time (the
+     * <title>, the sidebar logo and the footer all ask for it).
      *
-     * The logo goes null for a tenant, which falls through to the brand name as
-     * text in Filament's logo component: both existing logo views carry the
-     * product mark, one visibly and one as an sr-only label.
+     * No logo for any session: the only lockups in the tree carry the vendor's
+     * mark, which would be a second brand beside XGATE. Filament then renders the
+     * brand name as text.
      *
      * Extracted from panel(), which is on the shrink-only method-length list
      * (phpstan-method-length.php).
@@ -350,11 +347,7 @@ final class AppPanelProvider extends PanelProvider
         return $panel
             ->homeUrl(fn (): string => Dashboard::getUrl())
             ->brandName(fn (): string => TenantSurface::brandName())
-            ->brandLogo(fn (): View|Factory|null => TenantSurface::isTenantSession()
-                ? null
-                : (Auth::user()?->hasVerifiedEmail()
-                    ? view('filament.app.logo-empty')
-                    : view('filament.app.logo')))
+            ->brandLogo(null)
             ->brandLogoHeight('2.6rem');
     }
 

@@ -95,29 +95,28 @@ it('treats a social account on a non-tenant provider as a local user', function 
         ->and(CreateWorkspace::canView())->toBeTrue();
 });
 
-it('brands the tenant surface with the tenant name, not the product mark', function (): void {
+it('brands a tenant session with the deployment name, not the workspace name', function (): void {
+    config()->set('app.name', 'XGATE');
+
     $workspace = Workspace::factory()->create(['name' => 'Solstice Retail', 'slug' => 'solstice']);
     $user = federatedTenantSession($workspace);
 
     $this->actingAs($user);
     Filament::setTenant($workspace);
 
-    expect(filament()->getBrandName())->toBe('Solstice Retail');
+    expect(filament()->getBrandName())->toBe('XGATE');
 
-    $response = $this->get('/app/'.$workspace->slug)->assertSuccessful();
-
-    $response->assertSee('Solstice Retail');
-
-    $html = (string) $response->getContent();
+    $html = (string) $this->get('/app/'.$workspace->slug)->assertSuccessful()->getContent();
 
     // The <title> is rendered across several lines ("Home / - / <brand>"), so it
     // is compared collapsed rather than as one literal string.
     preg_match('/<title>(.*?)<\/title>/s', $html, $matches);
     $renderedTitle = trim((string) preg_replace('/\s+/', ' ', $matches[1] ?? ''));
 
-    // The <title> carries the name in place of the product mark…
-    expect($renderedTitle)->toContain('Solstice Retail')
-        // …and no rendered element of the tenant's page names the product.
+    // One brand for every tenant: the title names the deployment, not the
+    // workspace, and nothing on the page names the vendor.
+    expect($renderedTitle)->toContain('XGATE')
+        ->and($renderedTitle)->not->toContain('Solstice Retail')
         ->and($html)->not->toContain('Relaticle');
 });
 

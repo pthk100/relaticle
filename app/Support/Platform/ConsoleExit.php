@@ -139,7 +139,7 @@ final readonly class ConsoleExit
             return (string) __('filament/panel.console.exit_title');
         }
 
-        $brand = trim(TenantSurface::brandName());
+        $brand = trim(TenantSurface::consoleBrand());
 
         return $brand === ''
             ? (string) __('filament/panel.console.exit_title')

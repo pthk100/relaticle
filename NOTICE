@@ -732,6 +732,52 @@ Files modified:
   database/migrations/2025_08_12_202409_add_settings_to_custom_field_options_table.php
 
 
+THE MODIFICATION (2026-11-08, part 14) - one brand: the panel is XGATE for every tenant
+------------------------------------------------------------------------------------
+Changed: the app panel's brand is the DEPLOYMENT's name for every session.
+Before this, a session that arrived through the platform's federated hand-off
+rendered its bound workspace's name (part 4) and every other session rendered the
+vendor's `Relaticle`. The freeze decided one brand for the CRM module: XGATE,
+while the surrounding console keeps the tenant's own brand
+(`design/DECISIONS.md`, freeze question (c)). "White-label CRM" is not a claim this
+deployment makes.
+
+Files modified:
+  app/Support/Platform/TenantSurface.php
+      brandName() no longer reads the bound workspace: it returns
+      config('app.name') for every session, and the deployment sets that to
+      XGATE. New consoleBrand() keeps the workspace name for the ONE surface that
+      is per-tenant — the `← Console` control (part 6), whose accessible name has
+      to say where the link goes.
+  app/Providers/Filament/AppPanelProvider.php
+      brandLogo is null for every session, not only a tenant's. The two logo views
+      in the tree carry the vendor's mark, which beside an XGATE title would be a
+      second brand; Filament renders the brand name as text instead.
+  app/Support/BrandColors.php
+      the primary ramp is the platform's Daylight terracotta `#AD4E2E` (600), with
+      that token file's primary-hover `#99452A` (700) and primary-pressed
+      `#7E3A22` (800); the remaining steps are derived from the same hue by
+      Filament's own palette generator. The hard-coded violet belonged to no token
+      file.
+  tests/Feature/Platform/TenantSurfaceTest.php
+      the tenant-surface test asserts the deployment name in the <title> and the
+      absence of the workspace name there, instead of asserting per-tenant
+      branding.
+  tests/Feature/Platform/ConsoleExitTest.php
+      one new test: the exit control still names the console with the tenant's
+      workspace name while the module's brand is the deployment's.
+
+In the PLATFORM repository (not this one): `docker-compose.yml` sets
+`APP_NAME: XGATE` on the `relaticle`, `relaticle-worker` and `relaticle-scheduler`
+services. The image does not cache config at build time — serversideup's
+`AUTORUN_LARAVEL_CONFIG_CACHE` runs at container start — so the value is read from
+the environment.
+
+NOTHING ELSE CHANGED. isTenantSession() and tenantRealm() keep their jobs: the
+first still gates workspace creation (part 4) and the presence of the exit control
+(part 6).
+
+
 DEPLOYED BUILDS — the source commit behind each image tag
 ---------------------------------------------------------
 Every image tag this section maps is a build of THIS repository. The commit named

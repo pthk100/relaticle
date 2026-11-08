@@ -26,9 +26,9 @@ use Illuminate\Support\Str;
  *    data would live in a workspace nothing provisions, bills or tears down.
  *    Upstream's Filament registration flow exists for self-host onboarding, which
  *    is not this deployment's model.
- * 2. **The chrome carries the tenant's name, not the product's.** This is one
- *    deployment serving every tenant behind the reseller's own domains, so the
- *    vendor mark on the CRM surface names the wrong party.
+ * 2. **The chrome carries ONE brand, not the tenant's.** The CRM module is
+ *    XGATE-branded for every tenant, while the surrounding console carries the
+ *    tenant's own brand (`design/DECISIONS.md`, freeze question (c)).
  *
  * WHAT MAKES A SESSION A TENANT SESSION. The federated identity link is the
  * marker: `KeycloakFederationController` stores
@@ -39,8 +39,8 @@ use Illuminate\Support\Str;
  * self-host onboarding (a local user, no link) untouched, which is what keeps
  * this fork cheap to rebase.
  *
- * The branding half deliberately falls back to `config('app.name')` for every
- * other caller, so a stock self-host deployment still renders its own name.
+ * The brand is the deployment's own name, so a stock self-host deployment still
+ * renders its own name and this one renders XGATE.
  */
 final class TenantSurface
 {
@@ -133,23 +133,28 @@ final class TenantSurface
     }
 
     /**
-     * The name the tenant-facing chrome renders: the bound workspace's name for a
-     * tenant session, the deployment's own name otherwise.
+     * The name the CRM module's chrome renders: the deployment's own name, for
+     * every session. One brand serves every tenant (freeze question (c)).
      */
-    public static function brandName(?Authenticatable $user = null): string
+    public static function brandName(): string
     {
-        if (! self::isTenantSession($user)) {
-            return (string) config('app.name');
-        }
+        return (string) config('app.name');
+    }
 
+    /**
+     * The name the CONSOLE goes by, which is not the module's brand: the console
+     * is per-tenant, the CRM module is not. The `← Console` control names the
+     * place it returns to, so it reads the bound workspace's name for a tenant
+     * session.
+     */
+    public static function consoleBrand(?Authenticatable $user = null): string
+    {
         $tenant = Filament::getTenant();
 
-        if ($tenant instanceof Workspace && filled($tenant->name)) {
+        if (self::isTenantSession($user) && $tenant instanceof Workspace && filled($tenant->name)) {
             return (string) $tenant->name;
         }
 
-        // A tenant session with no bound tenant (a redirect in flight): the
-        // deployment name beats an empty header.
         return (string) config('app.name');
     }
 

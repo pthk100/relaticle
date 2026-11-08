@@ -7,6 +7,7 @@ use App\Models\Workspace;
 use App\Support\Platform\ConsoleExit;
 use App\Support\Platform\KeycloakEndSession;
 use App\Support\Platform\TenantSurface;
+use Filament\Facades\Filament;
 use Illuminate\Http\Request;
 
 /**
@@ -197,4 +198,17 @@ it('renders no control when no console is declared', function (): void {
     $response->assertSuccessful();
 
     expect((string) $response->getContent())->not->toContain('data-platform-console-exit');
+});
+
+it('names the console with the tenant brand while the module carries the deployment name', function (): void {
+    config()->set('app.name', 'XGATE');
+
+    $workspace = Workspace::factory()->create(['name' => 'Solstice Retail', 'slug' => 'solstice']);
+    $this->actingAs(federatedConsoleUser($workspace));
+    Filament::setTenant($workspace);
+
+    // The console is the tenant's brand; the CRM module is not, so the control
+    // that returns to the console must name it.
+    expect(ConsoleExit::title())->toBe('Back to the Solstice Retail console')
+        ->and(TenantSurface::brandName())->toBe('XGATE');
 });
