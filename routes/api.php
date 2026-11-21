@@ -12,6 +12,7 @@ use App\Http\Controllers\Api\V1\PeopleController;
 use App\Http\Controllers\Api\V1\PeopleUpsertController;
 use App\Http\Controllers\Api\V1\TasksController;
 use App\Http\Controllers\Api\V1\WorkspaceDeprovisionController;
+use App\Http\Controllers\Api\V1\WorkspaceMembersController;
 use App\Http\Controllers\Api\V1\WorkspaceProvisionController;
 use App\Http\Controllers\Api\V1\WorkspaceSessionController;
 use App\Http\Controllers\Api\V1\WorkspaceTokenController;
@@ -89,4 +90,8 @@ Route::prefix('v1')
         }
 
         Route::get('custom-fields', [CustomFieldsController::class, 'index'])->name('custom-fields.index');
+
+        // The member directory a member field accepts, so a caller can validate an id before
+        // it writes one. Inside this group on purpose: a platform secret must not enumerate it.
+        Route::get('workspaces/{slug}/members', [WorkspaceMembersController::class, 'index'])->name('workspaces.members.index');
     });

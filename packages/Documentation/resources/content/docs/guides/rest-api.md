@@ -54,8 +54,26 @@ An access token can also carry three email permissions: **Read email**, **Draft 
 | Tasks | `/v1/tasks` |
 | Notes | `/v1/notes` |
 | Custom fields | `/v1/custom-fields` (read only) |
+| Workspace members | `/v1/workspaces/{slug}/members` (read only) |
 
 Each record resource supports list, create, read, update and delete. Responses follow [JSON:API](https://jsonapi.org/), and each record carries its custom field values under `custom_fields`. List endpoints take filtering, sorting and pagination parameters, which the [API reference](/developers/api) documents per endpoint.
+
+## Workspace members
+
+`GET /v1/workspaces/{slug}/members` lists the people who can be named as a member: the workspace owner and everyone attached to the workspace. A company's `account_owner_id` and a task's `assignee_ids` accept only these ids, never a person record. Use it to check an id before you write it.
+
+```json
+{
+  "data": [
+    {"id": "01jz5v6y8k4m2n0p3q6r9s1t4u", "name": "Mint Suwan", "email": "mint@example.com", "role": "owner"},
+    {"id": "01jz5v6y8k4m2n0p3q6r9s1t4v", "name": "Ada Member", "email": "ada@example.com", "role": "member"}
+  ]
+}
+```
+
+`role` is `owner`, `admin`, `member` or `viewer`. Each row carries only those four fields, and the list is flat rather than JSON:API.
+
+The slug must be the token's own workspace. Any other workspace returns `403` with `{"message": "You do not belong to this workspace."}`, which is the answer every workspace-scoped route gives for a workspace the token cannot reach. Reading the list needs the `read` permission.
 
 ## Filter a list
 

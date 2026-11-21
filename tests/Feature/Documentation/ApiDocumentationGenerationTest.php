@@ -45,6 +45,7 @@ it('generates the complete API documentation with company ownership fields', fun
 
     $spec = Yaml::parse($disk->get('scribe/openapi.yaml'));
 
+    expect($spec['paths'])->toHaveKey('/api/v1/workspaces/{slug}/members');
     expect($spec['paths']['/api/v1/companies']['post']['requestBody']['content']['application/json']['schema']['properties'])
         ->toHaveKey('account_owner_id');
     expect($spec['paths']['/api/v1/companies/{id}']['put']['requestBody']['content']['application/json']['schema']['properties'])
