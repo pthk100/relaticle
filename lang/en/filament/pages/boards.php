@@ -29,6 +29,7 @@ return [
             'add' => 'Add Opportunity',
             'edit' => 'Edit',
             'delete' => 'Delete',
+            'ladder_board' => 'Ladder board',
         ],
         'filters' => [
             'company' => 'Company',

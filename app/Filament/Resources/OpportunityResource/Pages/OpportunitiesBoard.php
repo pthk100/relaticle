@@ -650,6 +650,16 @@ final class OpportunitiesBoard extends BoardResourcePage
         return $this->columnField()?->code === OpportunityCustomField::KOC_STAGE->value;
     }
 
+    /**
+     * The workspace that declares the ladder owns it, and only that workspace is
+     * offered the way in. A brand tenant declares the sales stage instead, so its
+     * board is the pipeline and it gets no ladder.
+     */
+    public static function declaresKocLadder(): bool
+    {
+        return self::resolveColumnField()?->code === OpportunityCustomField::KOC_STAGE->value;
+    }
+
     private function columnField(): ?CustomField
     {
         return $this->columnField ??= self::resolveColumnField();

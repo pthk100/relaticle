@@ -28,10 +28,25 @@ final class ListOpportunities extends ListRecords
 
     protected static string $resource = OpportunityResource::class;
 
+    /**
+     * The board is a sibling page whose only route from the list is a "Switch
+     * view" dropdown whose trigger reads "List", so the ladder view is easy never
+     * to discover. This is a direct link, one click, named for the ladder. A brand
+     * workspace declares no `koc_stage`, and its board is the sales pipeline, so
+     * it is offered no ladder.
+     */
     #[Override]
     protected function getHeaderActions(): array
     {
         return [
+            Action::make('ladder_board')
+                ->label(__('filament/pages/boards.opportunities.actions.ladder_board'))
+                ->icon('heroicon-o-view-columns')
+                ->url(OpportunityResource::getUrl('board'))
+                ->visible(fn (): bool => OpportunitiesBoard::declaresKocLadder())
+                ->color('gray')
+                ->button()
+                ->size(Size::Small),
             ActionGroup::make([
                 Action::make('import')
                     ->label(__('filament/resources/opportunity.pages.list.actions.import.label'))
