@@ -16,6 +16,7 @@ use App\Models\CustomField;
 use App\Models\CustomFieldOption;
 use App\Models\Opportunity;
 use App\Models\Workspace;
+use Closure;
 use Exception;
 use Filament\Actions\Action;
 use Filament\Actions\CreateAction;
@@ -47,117 +48,73 @@ final class OpportunitiesBoard extends BoardResourcePage
 
     protected static string $resource = OpportunityResource::class;
 
+    /**
+     * The collaboration ladder, in a workspace that declares one. In a brand
+     * tenant's workspace this is the sales stage, and the board is its pipeline.
+     */
+    private ?CustomField $columnField = null;
+
     public function getTitle(): string
     {
         return __('filament/pages/boards.opportunities.title');
     }
 
+    /**
+     * A row that is silently absent from a board is the failure mode this
+     * project keeps paying for, so the ladder board says what it holds.
+     */
+    public function getSubheading(): ?string
+    {
+        return $this->isKocLadder() ? (string) __('filament/pages/boards.opportunities.koc_caption') : null;
+    }
+
     public function board(Board $board): Board
     {
-        $stageField = self::stageCustomField();
-        $valueColumn = $stageField->getValueColumn();
+        $columnField = $this->columnField();
 
-        $customFields = CustomFields::infolist()
-            ->forModel(Opportunity::class)
-            ->only([OpportunityCustomField::AMOUNT, OpportunityCustomField::CLOSE_DATE])
-            ->hiddenLabels()
-            ->visibleWhenFilled()
-            ->withoutSections()
-            ->values()
-            ->keyBy(fn (mixed $field): string => $field->getName());
+        if (! $columnField instanceof CustomField) {
+            abort(403);
+        }
 
         return $board
-            ->query(
-                Opportunity::query()
-                    ->leftJoin('custom_field_values as cfv', function (JoinClause $join) use ($stageField): void {
-                        $join->on('opportunities.id', '=', 'cfv.entity_id')
-                            ->where('cfv.custom_field_id', '=', $stageField->getKey());
-                    })
-                    ->select('opportunities.*', 'cfv.'.$valueColumn)
-                    ->with(['company.media', 'contact'])
-            )
+            ->query($this->boardQuery($columnField))
             ->recordTitleAttribute('name')
-            ->columnIdentifier($valueColumn)
+            ->columnIdentifier($columnField->getValueColumn())
             ->positionIdentifier('order_column')
             ->searchable(['name'])
             ->columns($this->getColumns())
-            ->cardSchema(function (Schema $schema) use ($customFields): Schema {
-                $amountField = $customFields->get('custom_fields.'.OpportunityCustomField::AMOUNT->value)
-                    ?->visible(fn (?string $state): bool => filled($state))
-                    ->badge()
-                    ->color('success')
-                    ->icon(Heroicon::OutlinedCurrencyDollar)
-                    ->grow(false)
-                    ->hiddenLabel();
-
-                $closeDateField = $customFields->get('custom_fields.'.OpportunityCustomField::CLOSE_DATE->value)
-                    ?->visible(fn (?string $state): bool => filled($state))
-                    ->badge()
-                    ->color('gray')
-                    ->icon(Heroicon::OutlinedCalendar)
-                    ->grow(false)
-                    ->hiddenLabel()
-                    ->formatStateUsing(fn (?string $state): string => $this->formatCloseDateBadge($state));
-
-                return $schema
-                    ->components([
-                        CardFlex::make([
-                            RecordChipEntry::make('company.name')
-                                ->chipSize('sm')
-                                ->hiddenLabel()
-                                ->visible(fn (?string $state): bool => filled($state))
-                                ->color('gray')
-                                ->size(TextSize::ExtraSmall)
-                                ->grow(),
-                        ]),
-                        CardFlex::make([
-                            $amountField,
-                            $closeDateField,
-                        ])->align('center'),
-                    ]);
-            })
-            ->columnActions([
-                CreateAction::make()
-                    ->authorize(fn (): bool => Gate::allows('create', Opportunity::class))
-                    ->label(__('filament/pages/boards.opportunities.actions.add'))
-                    ->icon('heroicon-o-plus')
-                    ->iconButton()
-                    ->modalWidth(Width::Large)
-                    ->slideOver(false)
-                    ->model(Opportunity::class)
-                    ->schema($this->quickCreateForm(...))
-                    ->using($this->createCard(...)),
-            ])
+            ->cardSchema($this->cardSchema())
+            ->columnActions($this->columnActions())
             ->cardAction('edit')
-            ->cardActions([
-                Action::make('edit')
-                    ->authorize(fn (?Opportunity $record): bool => $record instanceof Opportunity && Gate::allows('update', $record))
-                    ->label(__('filament/pages/boards.opportunities.actions.edit'))
-                    ->slideOver()
-                    ->modalWidth(Width::ExtraLarge)
-                    ->icon('heroicon-o-pencil-square')
-                    ->schema(OpportunityForm::get(...))
-                    ->fillForm(fn (Opportunity $record): array => [
-                        'name' => $record->name,
-                        'company_id' => $record->company_id,
-                        'contact_id' => $record->contact_id,
-                    ])
-                    ->action(function (Opportunity $record, array $data): void {
-                        $record->update($data);
-                    }),
-                Action::make('delete')
-                    ->authorize(fn (?Opportunity $record): bool => $record instanceof Opportunity && Gate::allows('delete', $record))
-                    ->label(__('filament/pages/boards.opportunities.actions.delete'))
-                    ->icon('heroicon-o-trash')
-                    ->color('danger')
-                    ->requiresConfirmation()
-                    ->action(function (Opportunity $record): void {
-                        $record->delete();
-                    }),
-            ])
+            ->cardActions($this->cardActions())
             ->filters($this->boardFilters())
             ->filtersFormWidth(Width::Medium)
             ->headerToolbar();
+    }
+
+    /**
+     * The board's rows are the ones holding a value in its column field, so a
+     * sales opportunity is absent from the ladder board however the filters sit.
+     *
+     * @return Builder<Opportunity>
+     */
+    private function boardQuery(CustomField $columnField): Builder
+    {
+        $valueColumn = $columnField->getValueColumn();
+
+        $query = Opportunity::query()
+            ->leftJoin('custom_field_values as cfv', function (JoinClause $join) use ($columnField): void {
+                $join->on('opportunities.id', '=', 'cfv.entity_id')
+                    ->where('cfv.custom_field_id', '=', $columnField->getKey());
+            })
+            ->select('opportunities.*', 'cfv.'.$valueColumn)
+            ->with(['company.media', 'contact']);
+
+        if (! $this->isKocLadder()) {
+            return $query;
+        }
+
+        return $query->whereNotNull('cfv.'.$valueColumn);
     }
 
     /**
@@ -180,6 +137,106 @@ final class OpportunitiesBoard extends BoardResourcePage
                 ->multiple(),
             ...KocPipelineFilters::all(acceptedOnlyByDefault: true),
         ];
+    }
+
+    /**
+     * @return array<int, Action>
+     */
+    private function columnActions(): array
+    {
+        return [
+            CreateAction::make()
+                ->authorize(fn (): bool => Gate::allows('create', Opportunity::class))
+                ->label(__('filament/pages/boards.opportunities.actions.add'))
+                ->icon('heroicon-o-plus')
+                ->iconButton()
+                ->modalWidth(Width::Large)
+                ->slideOver(false)
+                ->model(Opportunity::class)
+                ->schema($this->quickCreateForm(...))
+                ->using($this->createCard(...)),
+        ];
+    }
+
+    /**
+     * @return array<int, Action>
+     */
+    private function cardActions(): array
+    {
+        return [
+            Action::make('edit')
+                ->authorize(fn (?Opportunity $record): bool => $record instanceof Opportunity && Gate::allows('update', $record))
+                ->label(__('filament/pages/boards.opportunities.actions.edit'))
+                ->slideOver()
+                ->modalWidth(Width::ExtraLarge)
+                ->icon('heroicon-o-pencil-square')
+                ->schema(OpportunityForm::get(...))
+                ->fillForm(fn (Opportunity $record): array => [
+                    'name' => $record->name,
+                    'company_id' => $record->company_id,
+                    'contact_id' => $record->contact_id,
+                ])
+                ->action(function (Opportunity $record, array $data): void {
+                    $record->update($data);
+                }),
+            Action::make('delete')
+                ->authorize(fn (?Opportunity $record): bool => $record instanceof Opportunity && Gate::allows('delete', $record))
+                ->label(__('filament/pages/boards.opportunities.actions.delete'))
+                ->icon('heroicon-o-trash')
+                ->color('danger')
+                ->requiresConfirmation()
+                ->action(function (Opportunity $record): void {
+                    $record->delete();
+                }),
+        ];
+    }
+
+    private function cardSchema(): Closure
+    {
+        return function (Schema $schema): Schema {
+            $customFields = CustomFields::infolist()
+                ->forModel(Opportunity::class)
+                ->only([OpportunityCustomField::AMOUNT, OpportunityCustomField::CLOSE_DATE])
+                ->hiddenLabels()
+                ->visibleWhenFilled()
+                ->withoutSections()
+                ->values()
+                ->keyBy(fn (mixed $field): string => $field->getName());
+
+            $amountField = $customFields->get('custom_fields.'.OpportunityCustomField::AMOUNT->value)
+                ?->visible(fn (?string $state): bool => filled($state))
+                ->badge()
+                ->color('success')
+                ->icon(Heroicon::OutlinedCurrencyDollar)
+                ->grow(false)
+                ->hiddenLabel();
+
+            $closeDateField = $customFields->get('custom_fields.'.OpportunityCustomField::CLOSE_DATE->value)
+                ?->visible(fn (?string $state): bool => filled($state))
+                ->badge()
+                ->color('gray')
+                ->icon(Heroicon::OutlinedCalendar)
+                ->grow(false)
+                ->hiddenLabel()
+                ->formatStateUsing(fn (?string $state): string => $this->formatCloseDateBadge($state));
+
+            return $schema
+                ->components([
+                    CardFlex::make([
+                        RecordChipEntry::make('company.name')
+                            ->chipSize('sm')
+                            ->hiddenLabel()
+                            ->visible(fn (?string $state): bool => filled($state))
+                            ->color('gray')
+                            ->size(TextSize::ExtraSmall)
+                            ->grow(),
+                    ]),
+                    CardFlex::make([
+                        $amountField,
+                        $closeDateField,
+                    ])->align('center'),
+                ]);
+        };
     }
 
     /**
@@ -217,7 +274,7 @@ final class OpportunitiesBoard extends BoardResourcePage
             $card->update([$positionIdentifier => $newPosition]);
 
             /** @var Opportunity $card */
-            $card->saveCustomFieldValue(self::stageCustomField(), $columnValue);
+            $card->saveCustomFieldValue($this->cardColumnField(), $columnValue);
         });
 
         $this->dispatch('kanban-card-moved', [
@@ -245,7 +302,7 @@ final class OpportunitiesBoard extends BoardResourcePage
                     ->searchable()
                     ->preload(),
                 CustomFields::form()
-                    ->except([OpportunityCustomField::STAGE])
+                    ->except([(string) $this->cardColumnField()->code])
                     ->build()
                     ->columnSpanFull()
                     ->columns(1),
@@ -262,9 +319,9 @@ final class OpportunitiesBoard extends BoardResourcePage
      */
     private function getColumns(): array
     {
-        return $this->stages()->map(fn (array $stage): Column => Column::make((string) $stage['id'])
-            ->color($stage['color'])
-            ->label($stage['name'])
+        return $this->ladderOptions()->map(fn (array $option): Column => Column::make((string) $option['id'])
+            ->color($option['color'])
+            ->label($option['name'])
         )->toArray();
     }
 
@@ -315,7 +372,7 @@ final class OpportunitiesBoard extends BoardResourcePage
         $opportunity = $currentWorkspace->opportunities()->create($data);
 
         if (filled($columnId)) {
-            $opportunity->saveCustomFieldValue(self::stageCustomField(), $columnId);
+            $opportunity->saveCustomFieldValue($this->cardColumnField(), $columnId);
             $opportunity->order_column = (float) $this->getBoardPositionInColumn($columnId);
             $opportunity->saveQuietly();
         }
@@ -325,24 +382,54 @@ final class OpportunitiesBoard extends BoardResourcePage
 
     private function ownsColumn(string $id): bool
     {
-        return $this->stages()->contains(fn (array $stage): bool => (string) $stage['id'] === $id);
+        return $this->ladderOptions()->contains(fn (array $option): bool => (string) $option['id'] === $id);
     }
 
-    private static function stageCustomField(): ?CustomField
+    private function isKocLadder(): bool
     {
-        /** @var CustomField|null */
-        return once(fn () => CustomField::query()
-            ->forEntity(Opportunity::class)
-            ->where('code', OpportunityCustomField::STAGE)
-            ->first());
+        return $this->columnField()?->code === OpportunityCustomField::KOC_STAGE->value;
+    }
+
+    private function columnField(): ?CustomField
+    {
+        return $this->columnField ??= self::resolveColumnField();
+    }
+
+    private function cardColumnField(): CustomField
+    {
+        $field = $this->columnField();
+
+        throw_unless($field instanceof CustomField, InvalidArgumentException::class, 'Board column field not available');
+
+        return $field;
+    }
+
+    /**
+     * The collaboration ladder owns the board where the workspace declares it.
+     * A brand tenant declares only the sales pipeline, so that stays its board.
+     */
+    private static function resolveColumnField(): ?CustomField
+    {
+        foreach ([OpportunityCustomField::KOC_STAGE, OpportunityCustomField::STAGE] as $code) {
+            $field = CustomField::query()
+                ->forEntity(Opportunity::class)
+                ->where('code', $code)
+                ->first();
+
+            if ($field instanceof CustomField) {
+                return $field;
+            }
+        }
+
+        return null;
     }
 
     /**
      * @return Collection<int, array{id: mixed, custom_field_id: mixed, name: mixed, color: string}>
      */
-    private function stages(): Collection
+    private function ladderOptions(): Collection
     {
-        $field = self::stageCustomField();
+        $field = $this->columnField();
 
         if (! $field instanceof CustomField) {
             return collect();
@@ -363,6 +450,6 @@ final class OpportunitiesBoard extends BoardResourcePage
      */
     public static function canAccess(array $parameters = []): bool
     {
-        return self::stageCustomField() instanceof CustomField;
+        return self::resolveColumnField() instanceof CustomField;
     }
 }

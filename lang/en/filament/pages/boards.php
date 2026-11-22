@@ -12,6 +12,7 @@ return [
 
     'opportunities' => [
         'title' => 'Opportunities',
+        'koc_caption' => 'KOC collaborations. This board mirrors the platform ladder, and a pitch stays in no response until the creator says yes.',
         'actions' => [
             'add' => 'Add Opportunity',
             'edit' => 'Edit',
