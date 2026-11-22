@@ -464,6 +464,23 @@ it('keeps a sales opportunity off the koc board whether the toggle is on or off'
         ->not->toContain($sales->getKey());
 });
 
+it('scopes the koc board query to rows holding a stage, whatever the toggle says', function (): void {
+    $collaboration = opportunitiesBoardKocCard($this->user, $this->workspace, 'Krill delivered', 'delivered');
+    $sales = opportunitiesBoardSalesCard($this->user, $this->workspace, 'Hand-made deal', 'Prospecting');
+
+    $component = livewire(OpportunitiesBoard::class);
+
+    expect($component->instance()->getFilteredTableQuery()->pluck('opportunities.id')->all())
+        ->toContain($collaboration->getKey())
+        ->not->toContain($sales->getKey());
+
+    $component->set('tableFilters.accepted_only.isActive', false);
+
+    expect($component->instance()->getFilteredTableQuery()->pluck('opportunities.id')->all())
+        ->toContain($collaboration->getKey())
+        ->not->toContain($sales->getKey());
+});
+
 it('explains on the board that it shows collaborations only', function (): void {
     $caption = __('filament/pages/boards.opportunities.koc_caption');
 
@@ -567,4 +584,16 @@ it('offers both pipeline filters on the opportunity list without hiding sales re
     expect($component->instance()->getFilteredTableQuery()->pluck('id')->all())
         ->toContain($accepted->getKey())
         ->not->toContain($pitch->getKey());
+});
+
+it('hides a record without a koc stage from the list while accepted only is on', function (): void {
+    $sales = opportunitiesBoardSalesCard($this->user, $this->workspace, 'Hand-made deal', 'Prospecting');
+
+    $component = livewire(ListOpportunities::class);
+
+    expect($component->instance()->getFilteredTableQuery()->pluck('id')->all())->toContain($sales->getKey());
+
+    $component->set('tableFilters.accepted_only.isActive', true);
+
+    expect($component->instance()->getFilteredTableQuery()->pluck('id')->all())->not->toContain($sales->getKey());
 });
