@@ -1886,3 +1886,25 @@ html.fi:has(body.fi-onboarding-wizard),
 .fi-note-card-date {
     @apply shrink-0 text-gray-500 dark:text-gray-400;
 }
+
+/*
+ * A board's lane row is its only horizontal scrollport, and five 300px lanes do
+ * not fit a laptop window. Where the platform paints classic scrollbars, put a
+ * thin one on the row so the track is a standing sign that the board continues;
+ * styling it also keeps the bar the same on every desktop. Overlay scrollbars
+ * (macOS) ignore this styling and reserve no room at all, which is why the board
+ * view carries its own paging control rather than trusting the bar.
+ */
+.flowforge-lane-row {
+    &::-webkit-scrollbar {
+        @apply h-2.5;
+    }
+
+    &::-webkit-scrollbar-track {
+        @apply bg-gray-500/15;
+    }
+
+    &::-webkit-scrollbar-thumb {
+        @apply rounded-full bg-gray-400;
+    }
+}
