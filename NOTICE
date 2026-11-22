@@ -900,6 +900,17 @@ the host, `3.6.3-logout-console-exit` and earlier, correspond to parts 1-6.)
       (the build excludes it), so the two test files carry no comparison. The image's
       own copy of this NOTICE is the build-time text: it carries part 14 and not this
       row.
+  :3.6.3-platform-credential-2            b700de28a  (`platform`)             21 of 21, all identical
+      part 15, and the tag the running containers use. b700de28a is 14aa43a88
+      plus one refactor the arch suite forced (the membership action exposes its
+      single execute() again, and the comments carry no em-dashes), so the build
+      context is a `git archive` of b700de28a, built on DEV050. The same comparison
+      as the row below: every file the three commits of this change touch and the
+      image carries (20 PHP files plus NOTICE) was sha256-compared inside the
+      running container against b700de28a, 21 of 21 identical, 0 differ; the seven
+      test files are not in the image (the build excludes `tests/`). The image's
+      own copy of this NOTICE is the build-time text: it carries part 15 and not
+      this row.
   :3.6.3-platform-credential              14aa43a88  (`platform`)             21 of 21, all identical
       part 15. The build context was a `git archive` of 14aa43a88, built on DEV050.
       Every file that commit touches and the image carries -- 20 PHP files plus
