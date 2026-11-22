@@ -16,7 +16,7 @@ use App\Onboarding\PlatformFieldOptions;
  * so an orchestrator can write the same codes for every tenant without
  * discovering a workspace's schema first.
  *
- * Twenty-six codes in three bands, in sort order:
+ * Thirty codes in four bands, in sort order:
  *
  *   1-9    identity and channel handles (emails, phone_number, whatsapp_number,
  *          line_id, wechat_id, kakaotalk_id, preferred_channel, job_title, linkedin)
@@ -25,6 +25,8 @@ use App\Onboarding\PlatformFieldOptions;
  *          account_owner, birthday, lifecycle_stage)
  *   30-34  consent mirrors (marketing_optin, dnc, optout_reason, jurisdiction,
  *          lawful_basis)
+ *   40-43  KOC collaboration mirrors (tiktok_handle, postal_address,
+ *          blacklist_kind, blacklist_reason)
  *
  * `lifecycle_stage` (t_7273de85) sits at the END of the profile band on purpose:
  * it is DERIVED (see `App\Support\LifecycleStage`), so it is the one code in this
@@ -73,6 +75,13 @@ enum PeopleField: string
     case OPTOUT_REASON = 'optout_reason';
     case JURISDICTION = 'jurisdiction';
     case LAWFUL_BASIS = 'lawful_basis';
+
+    // Band 4: KOC collaboration mirrors. The platform projects the creator's
+    // handle, the sample destination and the blacklist row onto the person.
+    case TIKTOK_HANDLE = 'tiktok_handle';
+    case POSTAL_ADDRESS = 'postal_address';
+    case BLACKLIST_KIND = 'blacklist_kind';
+    case BLACKLIST_REASON = 'blacklist_reason';
 
     /**
      * The four values the platform store holds. Never a boolean: "not_asked"
@@ -187,7 +196,9 @@ enum PeopleField: string
             self::BIRTHDAY => CustomFieldType::DATE->value,
             self::DNC => CustomFieldType::TOGGLE->value,
             self::LINE_ID, self::WECHAT_ID, self::KAKAOTALK_ID, self::DEPARTMENT,
-            self::ACCOUNT_OWNER, self::JOB_TITLE => CustomFieldType::TEXT->value,
+            self::ACCOUNT_OWNER, self::JOB_TITLE, self::TIKTOK_HANDLE,
+            self::BLACKLIST_KIND, self::BLACKLIST_REASON => CustomFieldType::TEXT->value,
+            self::POSTAL_ADDRESS => CustomFieldType::TEXTAREA->value,
         };
     }
 
@@ -220,6 +231,10 @@ enum PeopleField: string
             self::OPTOUT_REASON => 'Opt-out Reason',
             self::JURISDICTION => 'Jurisdiction',
             self::LAWFUL_BASIS => 'Lawful Basis',
+            self::TIKTOK_HANDLE => 'TikTok Handle',
+            self::POSTAL_ADDRESS => 'Postal Address',
+            self::BLACKLIST_KIND => 'Blacklist Kind',
+            self::BLACKLIST_REASON => 'Blacklist Reason',
         };
     }
 
@@ -241,7 +256,9 @@ enum PeopleField: string
     {
         return match ($this) {
             self::EMAILS, self::MARKETING_OPTIN, self::DNC, self::OPTOUT_REASON,
-            self::JURISDICTION, self::LAWFUL_BASIS, self::LIFECYCLE_STAGE => true,
+            self::JURISDICTION, self::LAWFUL_BASIS, self::LIFECYCLE_STAGE,
+            self::TIKTOK_HANDLE, self::POSTAL_ADDRESS, self::BLACKLIST_KIND,
+            self::BLACKLIST_REASON => true,
             default => false,
         };
     }
@@ -327,6 +344,10 @@ enum PeopleField: string
             self::OPTOUT_REASON => 32,
             self::JURISDICTION => 33,
             self::LAWFUL_BASIS => 34,
+            self::TIKTOK_HANDLE => 40,
+            self::POSTAL_ADDRESS => 41,
+            self::BLACKLIST_KIND => 42,
+            self::BLACKLIST_REASON => 43,
         };
     }
 
@@ -437,6 +458,10 @@ enum PeopleField: string
             self::OPTOUT_REASON => 'Why the contact opted out, from the platform consent store.',
             self::JURISDICTION => 'The privacy regime that governs this contact, from the platform consent store.',
             self::LAWFUL_BASIS => 'The legal basis the platform recorded for processing this contact\'s data.',
+            self::TIKTOK_HANDLE => 'The creator\'s TikTok handle, mirrored from the platform. It is the key the collaboration matches on, so a hand edit is overwritten.',
+            self::POSTAL_ADDRESS => 'Where the platform ships a sample. Mirrored from the platform.',
+            self::BLACKLIST_KIND => 'The kind of blacklist entry the platform holds for this creator. Do Not Contact stays the CRM\'s own flag.',
+            self::BLACKLIST_REASON => 'The reason the platform recorded for blacklisting this creator.',
             default => null,
         };
     }

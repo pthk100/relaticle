@@ -14,6 +14,7 @@ use App\Models\User;
 use Filament\Facades\Filament;
 use Filament\Forms\Components\Select;
 use Illuminate\Support\Facades\Date;
+use Illuminate\Support\ViewErrorBag;
 use Relaticle\Flowforge\Board;
 
 mutates(OpportunitiesBoard::class);
@@ -242,6 +243,8 @@ it('labels the contact select point of contact when adding an opportunity to a c
     $page = livewire(OpportunitiesBoard::class)
         ->call('mountAction', 'create', ['column' => (string) $prospecting->getKey()])
         ->instance();
+
+    view()->share('errors', new ViewErrorBag);
 
     expect($page->getSchema($page->getMountedActionSchemaName())->toHtml())->toContain('Point of Contact');
 });

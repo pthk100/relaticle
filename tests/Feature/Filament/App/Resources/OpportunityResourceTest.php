@@ -12,6 +12,7 @@ use Filament\Actions\Testing\TestAction;
 use Filament\Facades\Filament;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\ViewErrorBag;
 
 mutates(OpportunityResource::class);
 
@@ -144,6 +145,8 @@ it('labels the contact select point of contact in the `:dataset` modal', functio
     $page = livewire(ListOpportunities::class)
         ->mountAction($action === 'edit' ? TestAction::make('edit')->table($record) : $action)
         ->instance();
+
+    view()->share('errors', new ViewErrorBag);
 
     expect($page->getSchema($page->getMountedActionSchemaName())->toHtml())->toContain('Point of Contact');
 })->with(['create', 'edit']);
