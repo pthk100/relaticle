@@ -62,7 +62,11 @@ final readonly class EnsureWorkspaceOwner
         // platform identity (t_ca323f91), and SetApiWorkspaceContext requires it to
         // belong here. Attached AFTER the move, because an adoption off the service
         // user would otherwise find it still the owner and add no row.
-        $this->ensurePlatformServiceMembership->executeIfAvailable($workspace);
+        //
+        // A deployment with no configured platform identity attaches nothing and this
+        // still returns the owner: refusing the person their CRM would add an outage to
+        // a configuration problem, and the mint names the problem where it matters.
+        $this->ensurePlatformServiceMembership->execute($workspace);
 
         return $owner;
     }

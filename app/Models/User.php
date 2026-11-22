@@ -275,13 +275,13 @@ final class User extends Authenticatable implements FilamentUser, HasAvatar, Has
     }
 
     /**
-     * Everyone a HUMAN may name — a task assignee, a company's account owner.
+     * Everyone a HUMAN may name: a task assignee, a company's account owner.
      *
      * The platform's own identity is a member of every workspace (its credential must
      * belong for the API to accept it), but it is not a person: work assigned to it is
      * work nobody does, and it prints as a colleague in every picker (t_ca323f91).
-     * Deliberately separate from `memberOf`, which is an AUTHORIZATION scope — the
-     * platform's token must keep resolving through that one.
+     * Deliberately separate from `memberOf`, which is an AUTHORIZATION scope that the
+     * platform's token must keep resolving through.
      *
      * @param  Builder<User>  $query
      * @return Builder<User>
@@ -292,7 +292,7 @@ final class User extends Authenticatable implements FilamentUser, HasAvatar, Has
         $email = config('relaticle.platform.service_user_email');
 
         // Unconfigured means this deployment has no such identity, so there is
-        // nothing to exclude — and no email to compare against.
+        // nothing to exclude, and no email to compare against.
         return is_string($email) && $email !== ''
             ? $query->where('users.email', '<>', $email)
             : $query;

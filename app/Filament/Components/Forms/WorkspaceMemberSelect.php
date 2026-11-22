@@ -27,7 +27,7 @@ use Illuminate\Database\Eloquent\Builder;
  *
  * "And to people" is the platform identity's exclusion (t_ca323f91): it is a member of
  * every workspace so its credential can act there, but a picker must never offer the
- * automation as an assignee — and because this same query builds Filament's `in`
+ * automation as an assignee, and because this same query builds Filament's `in`
  * validation rule, excluding it here is what makes a hand-crafted payload naming it fail.
  */
 final class WorkspaceMemberSelect extends Select

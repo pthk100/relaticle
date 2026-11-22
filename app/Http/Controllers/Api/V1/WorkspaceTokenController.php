@@ -6,9 +6,9 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Actions\Platform\EnsurePlatformServiceMembership;
 use App\Actions\Platform\IssueWorkspaceToken;
+use App\Models\User;
 use App\Models\Workspace;
 use Illuminate\Http\JsonResponse;
-use RuntimeException;
 
 /**
  * Platform-level credential REISSUE for a workspace that already exists
@@ -27,7 +27,7 @@ use RuntimeException;
  * the workspace's earlier platform-minted tokens in the same call, so the caller
  * that stores the new one holds the only live credential for the workspace.
  *
- * The identity is NOT a caller input — and it is no longer the owner-of-record either
+ * The identity is NOT a caller input, and it is no longer the owner-of-record either
  * (t_ca323f91). A token minted for the workspace's owner is true to that owner but false
  * about the author: every row the platform writes through it carries `creator_id` = a
  * person, so the CRM shows that person's name and a person chip, presenting a projection
@@ -55,15 +55,15 @@ final readonly class WorkspaceTokenController
             return response()->json(['message' => 'Workspace not found.'], 404);
         }
 
-        try {
-            // Attaches the identity if this workspace predates the sweep, so the route
-            // guarantees the one precondition its token needs (a holder who belongs).
-            // Idempotent, and it never removes anybody.
-            $actor = $this->ensurePlatformServiceMembership->execute($workspace);
-        } catch (RuntimeException $exception) {
-            // Operator misconfiguration (no service user), not caller error — the same
-            // 500 and the same sentence the provisioning seam answers with.
-            return response()->json(['message' => $exception->getMessage()], 500);
+        // Attaches the identity if this workspace predates the sweep, so the route
+        // guarantees the one precondition its token needs (a holder who belongs).
+        // Idempotent, and it never removes anybody.
+        $actor = $this->ensurePlatformServiceMembership->execute($workspace);
+
+        if (! $actor instanceof User) {
+            // Operator misconfiguration (no service user), not caller error: the same 500
+            // and the same sentence the provisioning seam answers with.
+            return response()->json(['message' => EnsurePlatformServiceMembership::MISSING_IDENTITY], 500);
         }
 
         $issued = $this->issueWorkspaceToken->execute($actor, $workspace);
@@ -74,7 +74,7 @@ final readonly class WorkspaceTokenController
                 'slug' => $workspace->slug,
                 // The identity the credential now acts as. The orchestrator verifies the
                 // token against this before storing it. It is the PLATFORM, not the
-                // workspace's owner — `owner_email` used to be reported here and named a
+                // workspace's owner: `owner_email` used to be reported here and named a
                 // different (human) identity than the one the token acted as.
                 'actor_email' => $actor->email,
                 'token' => $issued['token'],

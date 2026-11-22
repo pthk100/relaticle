@@ -70,11 +70,18 @@ final readonly class ProvisionWorkspace
 
         // The credential this seam hands back acts as the PLATFORM, not as the tenant's
         // owner (t_ca323f91). A projected row is written by the platform and must be
-        // attributed to it; minting for the owner — which is what this seam did — made
+        // attributed to it; minting for the owner, which is what this seam did, made
         // every platform write render as that person's own edit. The workspace's OWNER
         // is unchanged (it is what the session broker signs in as); only the identity the
         // credential acts as moves.
+        //
+        // Required here: a workspace whose credential could not be minted is not a
+        // provisioned tenant, and the caller stores what this returns.
         $actor = $this->ensurePlatformServiceMembership->execute($workspace);
+
+        if (! $actor instanceof User) {
+            throw new RuntimeException(EnsurePlatformServiceMembership::MISSING_IDENTITY);
+        }
 
         return [
             'workspace' => $workspace,
@@ -100,9 +107,7 @@ final readonly class ProvisionWorkspace
             : null;
 
         if (! $user instanceof User) {
-            throw new RuntimeException(
-                'Platform service user is not configured or does not exist. Run `php artisan platform:service-user`.'
-            );
+            throw new RuntimeException(EnsurePlatformServiceMembership::MISSING_IDENTITY);
         }
 
         return $user;
