@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use App\Enums\CrmEntity;
 use App\Enums\CustomFields\OpportunityField;
+use App\Enums\CustomFields\TaskField;
 use App\Filament\Resources\OpportunityResource;
 use App\Filament\Resources\OpportunityResource\Pages\ListOpportunities;
 use App\Filament\Resources\OpportunityResource\Pages\OpportunitiesBoard;
@@ -11,11 +12,13 @@ use App\Models\Company;
 use App\Models\CustomField;
 use App\Models\CustomFieldOption;
 use App\Models\Opportunity;
+use App\Models\Task;
 use App\Models\User;
 use App\Models\Workspace;
 use App\Onboarding\CustomFieldRow;
 use Filament\Facades\Filament;
 use Filament\Forms\Components\Select;
+use Filament\Schemas\Schema;
 use Filament\Tables\Filters\SelectFilter;
 use Illuminate\Support\Facades\Date;
 use Illuminate\Support\ViewErrorBag;
@@ -57,17 +60,23 @@ function opportunitiesBoardField(OpportunityField $code, ?Workspace $workspace =
         ->firstOrFail();
 }
 
-/**
- * Declares the ladder in the workspace, the way the operations workspace gets it.
- * A workspace that declares no `koc_stage` is the brand tenant's case, so the
- * precondition belongs to the fixture rather than to the surface under test.
- */
 function declareOperationsKocField(Workspace $workspace): CustomField
+{
+    return declareOperationsField($workspace, OpportunityField::KOC_STAGE);
+}
+
+/**
+ * Declares one operations field in the workspace, the way the operations
+ * workspace gets it. A workspace that declares no `koc_stage` is the brand
+ * tenant's case, so the precondition belongs to the fixture rather than to the
+ * surface under test.
+ */
+function declareOperationsField(Workspace $workspace, OpportunityField $code): CustomField
 {
     $declared = CustomField::query()
         ->withoutGlobalScopes()
         ->forEntity(Opportunity::class)
-        ->where('code', OpportunityField::KOC_STAGE)
+        ->where('code', $code)
         ->where('tenant_id', $workspace->getKey())
         ->first();
 
@@ -78,14 +87,17 @@ function declareOperationsKocField(Workspace $workspace): CustomField
     $rows = CustomFieldRow::build(
         (string) $workspace->getKey(),
         Entities::getEntity(Opportunity::class)?->getAlias() ?? Opportunity::class,
-        OpportunityField::KOC_STAGE,
+        $code,
         now()->toImmutable(),
     );
 
     CustomField::query()->insert($rows['field']);
-    CustomFieldOption::query()->insert($rows['options']);
 
-    return opportunitiesBoardField(OpportunityField::KOC_STAGE, $workspace);
+    if ($rows['options'] !== []) {
+        CustomFieldOption::query()->insert($rows['options']);
+    }
+
+    return opportunitiesBoardField($code, $workspace);
 }
 
 function opportunitiesBoardDropField(CustomField $field): void
@@ -115,6 +127,73 @@ function opportunitiesBoardKocCard(User $user, Workspace $workspace, string $nam
     $opportunity->saveCustomFieldValue($field, opportunitiesBoardOption($field, $kocStage)->getKey());
 
     return $opportunity;
+}
+
+function opportunitiesBoardTaskField(TaskField $code): CustomField
+{
+    $workspace = Filament::getTenant();
+
+    throw_unless($workspace instanceof Workspace, RuntimeException::class, 'No workspace is bound.');
+
+    return CustomField::query()
+        ->withoutGlobalScopes()
+        ->forEntity(Task::class)
+        ->where('code', $code)
+        ->where('tenant_id', $workspace->getKey())
+        ->firstOrFail();
+}
+
+/**
+ * The card as the page composes it, which is what a reader sees: the record the
+ * board's own query produced, formatted the way `flowforge::livewire.card`
+ * receives it.
+ */
+function opportunitiesBoardCardHtml(Opportunity $opportunity): string
+{
+    $board = getOpportunityBoard();
+
+    foreach ($board->getColumnIdentifiers() as $columnId) {
+        foreach ($board->getBoardRecords((string) $columnId) as $record) {
+            if ($record->getKey() !== $opportunity->getKey()) {
+                continue;
+            }
+
+            $schema = $board->formatBoardRecord($record)['schema'];
+
+            throw_unless($schema instanceof Schema, RuntimeException::class, 'The board composed no card.');
+
+            return $schema->toHtml();
+        }
+    }
+
+    throw new RuntimeException("The board shows no card for [{$opportunity->getKey()}].");
+}
+
+/**
+ * The mint rule puts one open task on a collaboration, dated from the ladder.
+ */
+function opportunitiesBoardFollowUp(
+    User $user,
+    Workspace $workspace,
+    Opportunity $opportunity,
+    ?User $assignee,
+    string $dueAt,
+    string $status = 'To do',
+): Task {
+    $task = Task::factory()->recycle([$user, $workspace])->create(['title' => 'chase the post link']);
+
+    if ($assignee instanceof User) {
+        $task->assignees()->attach($assignee);
+    }
+
+    $task->saveCustomFieldValue(opportunitiesBoardTaskField(TaskField::DUE_DATE), Date::parse($dueAt, 'UTC'));
+    $task->saveCustomFieldValue(
+        opportunitiesBoardTaskField(TaskField::STATUS),
+        opportunitiesBoardOption(opportunitiesBoardTaskField(TaskField::STATUS), $status)->getKey(),
+    );
+    $opportunity->tasks()->attach($task);
+
+    return $task;
 }
 
 function opportunitiesBoardSalesCard(User $user, Workspace $workspace, string $name, string $salesStage): Opportunity
@@ -205,23 +284,90 @@ it('draws the koc lanes from the workspace options and puts each collaboration i
         ->assertDontSee('Prospecting');
 });
 
-it('renders the company entity icon on a board card', function (): void {
-    $company = Company::factory()->recycle([$this->user, $this->workspace])->create(['name' => 'Acme Corp']);
-    $koc = opportunitiesBoardField(OpportunityField::KOC_STAGE);
+it('carries the open follow-up and its assignee on a collaboration card and no company chip', function (): void {
+    $this->travelTo(Date::parse('2026-08-20 09:00:00', 'UTC'));
 
-    Opportunity::factory()
+    $company = Company::factory()->recycle([$this->user, $this->workspace])->create(['name' => 'Acme Corp']);
+    $owner = User::factory()->create(['name' => 'Nok Srisuk']);
+    $this->workspace->users()->attach($owner, ['role' => 'admin']);
+
+    $koc = opportunitiesBoardField(OpportunityField::KOC_STAGE);
+    $opportunity = Opportunity::factory()
         ->recycle([$this->user, $this->workspace])
         ->create([
-            'name' => 'Acme renewal',
+            'name' => 'Krill | SKU-1 - @arteereview',
             'company_id' => $company->getKey(),
             'custom_fields' => [
                 $koc->code => opportunitiesBoardOption($koc, 'sample_pending')->getKey(),
             ],
         ]);
 
-    livewire(OpportunitiesBoard::class)
-        ->assertSee('Acme Corp')
-        ->assertSee(CrmEntity::Company->iconPath(), escape: false);
+    opportunitiesBoardFollowUp($this->user, $this->workspace, $opportunity, $owner, '2026-08-21 09:00:00');
+
+    $html = opportunitiesBoardCardHtml($opportunity);
+
+    expect($html)
+        ->toContain('fi-badge')
+        ->toContain('Nok Srisuk')
+        ->toContain('follow-up · Fri 21')
+        ->not->toContain('Acme Corp')
+        ->not->toContain(CrmEntity::Company->iconPath());
+});
+
+it('reads a follow-up past its own day as days late', function (): void {
+    $this->travelTo(Date::parse('2026-08-24 09:00:00', 'UTC'));
+
+    $opportunity = opportunitiesBoardKocCard($this->user, $this->workspace, 'Krill | SKU-1 - @arteereview', 'sample_pending');
+    opportunitiesBoardFollowUp($this->user, $this->workspace, $opportunity, null, '2026-08-21 09:00:00');
+
+    $html = opportunitiesBoardCardHtml($opportunity);
+
+    expect($html)
+        ->toContain('follow-up · 3d late')
+        ->toContain('fi-color-warning');
+});
+
+it('leaves a follow-up the team has closed off the card', function (): void {
+    $operator = declareOperationsField($this->workspace, OpportunityField::OPERATOR);
+
+    $opportunity = opportunitiesBoardKocCard($this->user, $this->workspace, 'Krill | SKU-1 - @arteereview', 'sample_pending');
+    $opportunity->saveCustomFieldValue($operator, 'Somchai');
+    opportunitiesBoardFollowUp($this->user, $this->workspace, $opportunity, null, '2026-08-21 09:00:00', 'Done');
+
+    $html = opportunitiesBoardCardHtml($opportunity);
+
+    expect($html)
+        ->toContain('Somchai')
+        ->not->toContain('follow-up');
+});
+
+it('names the operator mirror on a collaboration that has no open follow-up', function (): void {
+    $operator = declareOperationsField($this->workspace, OpportunityField::OPERATOR);
+
+    $opportunity = opportunitiesBoardKocCard($this->user, $this->workspace, 'Krill | SKU-1 - @arteereview', 'sample_pending');
+    $opportunity->saveCustomFieldValue($operator, 'Somchai');
+
+    $html = opportunitiesBoardCardHtml($opportunity);
+
+    expect($html)
+        ->toContain('fi-badge')
+        ->toContain('Somchai')
+        ->not->toContain('follow-up');
+});
+
+it('renders the company entity icon on a sales board card', function (): void {
+    opportunitiesBoardDropField(opportunitiesBoardField(OpportunityField::KOC_STAGE));
+
+    $company = Company::factory()->recycle([$this->user, $this->workspace])->create(['name' => 'Acme Corp']);
+
+    $deal = opportunitiesBoardSalesCard($this->user, $this->workspace, 'Hand-made deal', 'Prospecting');
+    $deal->update(['company_id' => $company->getKey()]);
+
+    $html = opportunitiesBoardCardHtml($deal);
+
+    expect($html)
+        ->toContain('Acme Corp')
+        ->toContain(CrmEntity::Company->iconPath());
 });
 
 it('orders the company filter alphabetically and chips each option', function (): void {
@@ -476,10 +622,12 @@ it('buckets the close-date badge against the user calendar, not the server clock
     $this->user->forceFill(['timezone' => 'Asia/Tokyo'])->save();
     Filament::setCurrentPanel(Filament::getPanel('app'));
 
+    opportunitiesBoardDropField(opportunitiesBoardField(OpportunityField::KOC_STAGE));
+
     $closeField = opportunitiesBoardField(OpportunityField::CLOSE_DATE);
 
-    $opportunity = opportunitiesBoardKocCard($this->user, $this->workspace, 'Krill sample', 'sample_pending');
-    $opportunity->saveCustomFieldValue($closeField, Date::parse('2026-08-19 00:00:00', 'UTC'));
+    $deal = opportunitiesBoardSalesCard($this->user, $this->workspace, 'Hand-made deal', 'Prospecting');
+    $deal->saveCustomFieldValue($closeField, Date::parse('2026-08-19 00:00:00', 'UTC'));
 
     livewire(OpportunitiesBoard::class)
         ->assertSee('Closes Today')
@@ -500,10 +648,12 @@ it('does not walk a close date back a day for a viewer west of utc', function ()
     $this->user->forceFill(['timezone' => 'America/Los_Angeles'])->save();
     Filament::setCurrentPanel(Filament::getPanel('app'));
 
+    opportunitiesBoardDropField(opportunitiesBoardField(OpportunityField::KOC_STAGE));
+
     $closeField = opportunitiesBoardField(OpportunityField::CLOSE_DATE);
 
-    $opportunity = opportunitiesBoardKocCard($this->user, $this->workspace, 'Krill sample', 'sample_pending');
-    $opportunity->saveCustomFieldValue($closeField, Date::parse('2026-08-19 00:00:00', 'UTC'));
+    $deal = opportunitiesBoardSalesCard($this->user, $this->workspace, 'Hand-made deal', 'Prospecting');
+    $deal->saveCustomFieldValue($closeField, Date::parse('2026-08-19 00:00:00', 'UTC'));
 
     livewire(OpportunitiesBoard::class)
         ->assertSee('Closes Today')
@@ -570,6 +720,22 @@ it('says a filtered-out pitch is hidden rather than absent', function (): void {
         ->assertDontSee('hidden by the filter');
 });
 
+it('marks the no response column with the pitches the toggle is hiding', function (): void {
+    $pitch = opportunitiesBoardKocCard($this->user, $this->workspace, 'Pitch never answered', 'no_response');
+
+    $component = livewire(OpportunitiesBoard::class);
+
+    $component
+        ->assertSee('+1 pitch hidden')
+        ->assertDontSee($pitch->name);
+
+    $component->set('tableFilters.accepted_only.isActive', false);
+
+    $component
+        ->assertSee($pitch->name)
+        ->assertDontSee('pitch hidden');
+});
+
 it('reads an empty workspace as empty rather than as filtered', function (): void {
     $component = livewire(OpportunitiesBoard::class);
 
@@ -621,6 +787,11 @@ it('explains on the board that it shows collaborations only', function (): void 
     $component->assertSee($caption);
 });
 
+it('says what the toggle does in the caption, not only what the board is', function (): void {
+    livewire(OpportunitiesBoard::class)
+        ->assertSee('so pitches are hidden unless you show them');
+});
+
 it("offers the workspace's own koc stage options in the stage filter", function (): void {
     $koc = opportunitiesBoardField(OpportunityField::KOC_STAGE);
 
@@ -669,6 +840,7 @@ it('keeps the sales board and drops both koc filters where the workspace declare
         ->assertOk()
         ->assertDontSee('KOC stage')
         ->assertDontSee('Accepted collaborations only')
+        ->assertDontSee('pitch hidden')
         ->assertDontSee(__('filament/pages/boards.opportunities.koc_caption'));
 
     expect(livewire(ListOpportunities::class)->instance()->getTable()->getFilters())

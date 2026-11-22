@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Filament\Resources\OpportunityResource\Pages;
 
 use App\Enums\CustomFields\OpportunityField as OpportunityCustomField;
+use App\Enums\CustomFields\TaskField as TaskCustomField;
 use App\Filament\Components\Forms\RecordSelect;
 use App\Filament\Components\Infolists\RecordChipEntry;
 use App\Filament\Components\Tables\Filters\RecordSelectFilter;
@@ -16,12 +17,16 @@ use App\Filament\Resources\OpportunityResource\OpportunityBoard;
 use App\Models\CustomField;
 use App\Models\CustomFieldOption;
 use App\Models\Opportunity;
+use App\Models\Task;
 use App\Models\Workspace;
+use Carbon\CarbonImmutable;
 use Closure;
+use DateTimeInterface;
 use Exception;
 use Filament\Actions\Action;
 use Filament\Actions\CreateAction;
 use Filament\Forms\Components\TextInput;
+use Filament\Infolists\Components\TextEntry;
 use Filament\Schemas\Schema;
 use Filament\Support\Enums\TextSize;
 use Filament\Support\Enums\Width;
@@ -96,6 +101,25 @@ final class OpportunitiesBoard extends BoardResourcePage
     }
 
     /**
+     * The ladder keeps a pitch in no response until the creator says yes, so that
+     * column is the only one the toggle can empty. It says how many it is hiding.
+     */
+    public function hiddenPitchCount(string $columnId): int
+    {
+        if (! $this->isKocLadder()) {
+            return 0;
+        }
+
+        $pitch = $this->columnField()?->options->firstWhere('name', OpportunityCustomField::KOC_STAGE_PITCH);
+
+        if (! $pitch instanceof CustomFieldOption || (string) $pitch->getKey() !== $columnId) {
+            return 0;
+        }
+
+        return $this->hiddenCardsInColumn($columnId);
+    }
+
+    /**
      * The empty block answers the board's own unfiltered rows, so a filter hiding
      * the only pitch can never pass itself off as a workspace with no work.
      */
@@ -153,7 +177,7 @@ final class OpportunitiesBoard extends BoardResourcePage
                     ->where('cfv.custom_field_id', '=', $columnField->getKey());
             })
             ->select('opportunities.*', 'cfv.'.$valueColumn)
-            ->with(['company.media', 'contact']);
+            ->with($this->cardRelations());
 
         if (! $this->isKocLadder()) {
             return $query;
@@ -162,6 +186,19 @@ final class OpportunitiesBoard extends BoardResourcePage
         return $query
             ->whereNotNull('cfv.'.$valueColumn)
             ->orderByDesc('opportunities.updated_at');
+    }
+
+    /**
+     * A collaboration card names the follow-up and the operator, so both load with
+     * the row. A sales card keeps the brand chip it has always carried.
+     *
+     * @return list<string>
+     */
+    private function cardRelations(): array
+    {
+        return $this->isKocLadder()
+            ? ['tasks.assignees', 'tasks.customFieldValues.customField', 'customFieldValues.customField']
+            : ['company.media', 'contact'];
     }
 
     /**
@@ -238,52 +275,219 @@ final class OpportunitiesBoard extends BoardResourcePage
         ];
     }
 
+    /**
+     * A collaboration card names the two facts the operator acts on; a sales card
+     * keeps the brand and the deal's own values, because its title carries neither.
+     */
     private function cardSchema(): Closure
     {
         return function (Schema $schema): Schema {
-            $customFields = CustomFields::infolist()
-                ->forModel(Opportunity::class)
-                ->only([OpportunityCustomField::AMOUNT, OpportunityCustomField::CLOSE_DATE])
-                ->hiddenLabels()
-                ->visibleWhenFilled()
-                ->withoutSections()
-                ->values()
-                ->keyBy(fn (mixed $field): string => $field->getName());
-
-            $amountField = $customFields->get('custom_fields.'.OpportunityCustomField::AMOUNT->value)
-                ?->visible(fn (?string $state): bool => filled($state))
-                ->badge()
-                ->color('success')
-                ->icon(Heroicon::OutlinedCurrencyDollar)
-                ->grow(false)
-                ->hiddenLabel();
-
-            $closeDateField = $customFields->get('custom_fields.'.OpportunityCustomField::CLOSE_DATE->value)
-                ?->visible(fn (?string $state): bool => filled($state))
-                ->badge()
-                ->color('gray')
-                ->icon(Heroicon::OutlinedCalendar)
-                ->grow(false)
-                ->hiddenLabel()
-                ->formatStateUsing(fn (?string $state): string => $this->formatCloseDateBadge($state));
-
-            return $schema
-                ->components([
+            if ($this->isKocLadder()) {
+                return $schema->components([
                     CardFlex::make([
-                        RecordChipEntry::make('company.name')
-                            ->chipSize('sm')
-                            ->hiddenLabel()
-                            ->visible(fn (?string $state): bool => filled($state))
-                            ->color('gray')
-                            ->size(TextSize::ExtraSmall)
-                            ->grow(),
-                    ]),
-                    CardFlex::make([
-                        $amountField,
-                        $closeDateField,
+                        $this->ownerBadge(),
+                        $this->followUpBadge(),
                     ])->align('center'),
                 ]);
+            }
+
+            return $schema->components($this->salesCardRows());
         };
+    }
+
+    /**
+     * @return array<int, CardFlex>
+     */
+    private function salesCardRows(): array
+    {
+        $customFields = CustomFields::infolist()
+            ->forModel(Opportunity::class)
+            ->only([OpportunityCustomField::AMOUNT, OpportunityCustomField::CLOSE_DATE])
+            ->hiddenLabels()
+            ->visibleWhenFilled()
+            ->withoutSections()
+            ->values()
+            ->keyBy(fn (mixed $field): string => $field->getName());
+
+        $amountField = $customFields->get('custom_fields.'.OpportunityCustomField::AMOUNT->value)
+            ?->visible(fn (?string $state): bool => filled($state))
+            ->badge()
+            ->color('success')
+            ->icon(Heroicon::OutlinedCurrencyDollar)
+            ->grow(false)
+            ->hiddenLabel();
+
+        $closeDateField = $customFields->get('custom_fields.'.OpportunityCustomField::CLOSE_DATE->value)
+            ?->visible(fn (?string $state): bool => filled($state))
+            ->badge()
+            ->color('gray')
+            ->icon(Heroicon::OutlinedCalendar)
+            ->grow(false)
+            ->hiddenLabel()
+            ->formatStateUsing(fn (?string $state): string => $this->formatCloseDateBadge($state));
+
+        return [
+            CardFlex::make([
+                RecordChipEntry::make('company.name')
+                    ->chipSize('sm')
+                    ->hiddenLabel()
+                    ->visible(fn (?string $state): bool => filled($state))
+                    ->color('gray')
+                    ->size(TextSize::ExtraSmall)
+                    ->grow(),
+            ]),
+            CardFlex::make([
+                $amountField,
+                $closeDateField,
+            ])->align('center'),
+        ];
+    }
+
+    /**
+     * The open task's assignee is who gets nudged, so that name wins over the
+     * operator mirror the platform wrote.
+     */
+    private function ownerBadge(): TextEntry
+    {
+        return TextEntry::make('owner_badge')
+            ->state(fn (Opportunity $record): ?string => $this->ownerName($record))
+            ->visible(fn (?string $state): bool => filled($state))
+            ->badge()
+            ->color('gray')
+            ->icon(Heroicon::OutlinedUser)
+            ->hiddenLabel()
+            ->grow(false)
+            ->size(TextSize::ExtraSmall);
+    }
+
+    private function followUpBadge(): TextEntry
+    {
+        return TextEntry::make('follow_up_badge')
+            ->state(fn (Opportunity $record): ?string => $this->followUp($record)['label'] ?? null)
+            ->visible(fn (?string $state): bool => filled($state))
+            ->badge()
+            ->color(fn (Opportunity $record): string => ($this->followUp($record)['late'] ?? false) ? 'warning' : 'gray')
+            ->hiddenLabel()
+            ->grow(false)
+            ->size(TextSize::ExtraSmall);
+    }
+
+    private function ownerName(Opportunity $record): ?string
+    {
+        $assignee = $this->openFollowUp($record)?->assignees->first()?->name;
+
+        if (filled($assignee)) {
+            return (string) $assignee;
+        }
+
+        $field = $this->operatorField();
+
+        if (! $field instanceof CustomField) {
+            return null;
+        }
+
+        $operator = $record->customFieldValues->firstWhere('custom_field_id', $field->getKey())?->getValue();
+
+        return is_string($operator) && $operator !== '' ? $operator : null;
+    }
+
+    /**
+     * One open task per collaboration is the mint rule, so the earliest due date
+     * is the one the card names.
+     */
+    private function openFollowUp(Opportunity $record): ?Task
+    {
+        $statusField = $this->taskFields()['status'];
+        $doneOptionId = $statusField instanceof CustomField
+            ? $statusField->options->firstWhere('name', TaskCustomField::DONE_STATUS)?->getKey()
+            : null;
+
+        return $record->tasks
+            ->reject(function (Task $task) use ($statusField, $doneOptionId): bool {
+                if (! $statusField instanceof CustomField || $doneOptionId === null) {
+                    return false;
+                }
+
+                $status = $task->customFieldValues->firstWhere('custom_field_id', $statusField->getKey());
+
+                return (string) $status?->getValue() === (string) $doneOptionId;
+            })
+            ->sortBy(fn (Task $task): int => $this->taskDueDate($task)?->getTimestamp() ?? PHP_INT_MAX)
+            ->first();
+    }
+
+    /**
+     * @return array{label: string, late: bool}|null
+     */
+    private function followUp(Opportunity $record): ?array
+    {
+        $due = $this->taskDueDate($this->openFollowUp($record));
+
+        if (! $due instanceof CarbonImmutable) {
+            return null;
+        }
+
+        $timezone = FilamentTimezone::get();
+        $dueDay = $due->setTimezone($timezone)->startOfDay();
+        $today = Date::now($timezone)->startOfDay();
+
+        if ($dueDay->lessThan($today)) {
+            return [
+                'label' => __('filament/pages/boards.opportunities.card.follow_up_late', [
+                    'days' => (int) round($today->diffInDays($dueDay, true)),
+                ]),
+                'late' => true,
+            ];
+        }
+
+        return [
+            'label' => __('filament/pages/boards.opportunities.card.follow_up', ['date' => $dueDay->format('D j')]),
+            'late' => false,
+        ];
+    }
+
+    private function taskDueDate(?Task $task): ?CarbonImmutable
+    {
+        if (! $task instanceof Task) {
+            return null;
+        }
+
+        $field = $this->taskFields()['due_date'];
+
+        if (! $field instanceof CustomField) {
+            return null;
+        }
+
+        $due = $task->customFieldValues->firstWhere('custom_field_id', $field->getKey())?->getValue();
+
+        return $due instanceof DateTimeInterface ? CarbonImmutable::instance($due) : null;
+    }
+
+    /**
+     * @return array{status: ?CustomField, due_date: ?CustomField}
+     */
+    private function taskFields(): array
+    {
+        return once(function (): array {
+            $fields = CustomField::query()
+                ->forEntity(Task::class)
+                ->with('options')
+                ->whereIn('code', [TaskCustomField::STATUS->value, TaskCustomField::DUE_DATE->value])
+                ->get();
+
+            return [
+                'status' => $fields->firstWhere('code', TaskCustomField::STATUS->value),
+                'due_date' => $fields->firstWhere('code', TaskCustomField::DUE_DATE->value),
+            ];
+        });
+    }
+
+    private function operatorField(): ?CustomField
+    {
+        return once(fn (): ?CustomField => CustomField::query()
+            ->forEntity(Opportunity::class)
+            ->where('code', OpportunityCustomField::OPERATOR->value)
+            ->first());
     }
 
     /**
