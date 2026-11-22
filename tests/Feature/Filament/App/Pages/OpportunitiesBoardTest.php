@@ -157,6 +157,22 @@ function opportunitiesBoardForeignKocOptionId(Workspace $workspace): string
         ->getKey();
 }
 
+function opportunitiesBoardForeignStageOptionId(Workspace $workspace): string
+{
+    User::factory()->withWorkspace()->create();
+
+    return (string) CustomField::query()
+        ->withoutGlobalScopes()
+        ->forEntity(Opportunity::class)
+        ->where('code', OpportunityField::STAGE)
+        ->where('tenant_id', '!=', $workspace->getKey())
+        ->firstOrFail()
+        ->options()
+        ->withoutGlobalScopes()
+        ->firstOrFail()
+        ->getKey();
+}
+
 function opportunitiesBoardLadderCardIds(Board $board): array
 {
     return collect($board->getColumnIdentifiers())
@@ -261,39 +277,90 @@ it('redirects the legacy board url to the resource board page', function (): voi
         ->assertRedirect(OpportunityResource::getUrl('board'));
 });
 
-it('moves a collaboration between koc lanes and leaves the sales stage alone', function (): void {
+it('renders no draggable card on the ladder board', function (): void {
+    opportunitiesBoardKocCard($this->user, $this->workspace, 'Krill sample', 'sample_pending');
+
+    $component = livewire(OpportunitiesBoard::class);
+
+    expect($component->instance()->getBoard()->getPositionIdentifierAttribute())->toBeNull();
+
+    $component
+        ->assertOk()
+        ->assertDontSee('x-sortable');
+});
+
+it('refuses a drop on the ladder because the platform owns the rung', function (): void {
     $koc = opportunitiesBoardField(OpportunityField::KOC_STAGE);
 
     $opportunity = opportunitiesBoardKocCard($this->user, $this->workspace, 'Krill sample', 'sample_pending');
 
     livewire(OpportunitiesBoard::class)
         ->call('moveCard', (string) $opportunity->id, (string) opportunitiesBoardOption($koc, 'shipped')->getKey())
-        ->assertDispatched('kanban-card-moved');
+        ->assertNotDispatched('kanban-card-moved');
 
     $fresh = $opportunity->fresh();
 
     expect($fresh->customFieldValues()->where('custom_field_id', $koc->getKey())->value($koc->getValueColumn()))
-        ->toBe(opportunitiesBoardOption($koc, 'shipped')->getKey())
+        ->toBe(opportunitiesBoardOption($koc, 'sample_pending')->getKey())
+        ->and($fresh->order_column)->toBeNull()
         ->and($fresh->customFieldValues()->where('custom_field_id', $this->stageField->getKey())->exists())
         ->toBeFalse();
 });
 
-it('rejects a move to a koc option the board does not own', function (string $targetKind): void {
+it('orders a ladder lane by the last update because a rung carries no position', function (): void {
     $koc = opportunitiesBoardField(OpportunityField::KOC_STAGE);
-    $opportunity = opportunitiesBoardKocCard($this->user, $this->workspace, 'Krill sample', 'sample_pending');
 
-    $foreignOptionId = opportunitiesBoardForeignKocOptionId($this->workspace);
+    $older = opportunitiesBoardKocCard($this->user, $this->workspace, 'Older sample', 'delivered');
+    $newer = opportunitiesBoardKocCard($this->user, $this->workspace, 'Newer sample', 'delivered');
 
-    $targetId = $targetKind === 'foreign' ? (string) $foreignOptionId : 'not-an-option';
+    $older->forceFill(['updated_at' => Date::parse('2026-01-01 09:00:00', 'UTC')])->saveQuietly();
+    $newer->forceFill(['updated_at' => Date::parse('2026-01-02 09:00:00', 'UTC')])->saveQuietly();
+
+    $lane = opportunitiesBoardCardIds(getOpportunityBoard(), opportunitiesBoardOption($koc, 'delivered')->getKey());
+
+    expect($lane)->toBe([$newer->getKey(), $older->getKey()]);
+});
+
+it('rejects a sales drop to a stage the board does not own', function (string $targetKind): void {
+    opportunitiesBoardDropField(opportunitiesBoardField(OpportunityField::KOC_STAGE));
+
+    $opportunity = opportunitiesBoardSalesCard($this->user, $this->workspace, 'Hand-made deal', 'Prospecting');
+
+    $targetId = $targetKind === 'foreign'
+        ? opportunitiesBoardForeignStageOptionId($this->workspace)
+        : 'not-an-option';
 
     livewire(OpportunitiesBoard::class)
         ->call('moveCard', (string) $opportunity->id, $targetId)
         ->assertStatus(422)
         ->assertNotDispatched('kanban-card-moved');
 
-    expect($opportunity->fresh()->customFieldValues()->where('custom_field_id', $koc->getKey())->value($koc->getValueColumn()))
-        ->toBe(opportunitiesBoardOption($koc, 'sample_pending')->getKey());
+    expect($opportunity->fresh()->customFieldValues()->where('custom_field_id', $this->stageField->getKey())->value($this->stageField->getValueColumn()))
+        ->toBe(opportunitiesBoardOption($this->stageField, 'Prospecting')->getKey());
 })->with(['foreign workspace option' => 'foreign', 'garbage id' => 'garbage']);
+
+it('keeps the sales board draggable and persists a drop into another stage', function (): void {
+    opportunitiesBoardDropField(opportunitiesBoardField(OpportunityField::KOC_STAGE));
+
+    $deal = opportunitiesBoardSalesCard($this->user, $this->workspace, 'Hand-made deal', 'Prospecting');
+    $qualification = opportunitiesBoardOption($this->stageField, 'Qualification');
+
+    $component = livewire(OpportunitiesBoard::class);
+
+    expect($component->instance()->getBoard()->getPositionIdentifierAttribute())->toBe('order_column');
+
+    $component
+        ->assertSee('x-sortable-group', escape: false)
+        ->assertSee('x-sortable-item', escape: false)
+        ->call('moveCard', (string) $deal->getKey(), (string) $qualification->getKey())
+        ->assertDispatched('kanban-card-moved');
+
+    $fresh = $deal->fresh();
+
+    expect($fresh->customFieldValues()->where('custom_field_id', $this->stageField->getKey())->value($this->stageField->getValueColumn()))
+        ->toBe($qualification->getKey())
+        ->and($fresh->order_column)->not->toBeNull();
+});
 
 it('rejects a card created in a koc option the board does not own', function (string $targetKind): void {
     $foreignOptionId = opportunitiesBoardForeignKocOptionId($this->workspace);
@@ -324,7 +391,8 @@ it('creates a card in a koc lane the board owns', function (): void {
     expect($opportunity->customFieldValues()->where('custom_field_id', $koc->getKey())->value($koc->getValueColumn()))
         ->toBe($shipped->getKey())
         ->and($opportunity->customFieldValues()->where('custom_field_id', $this->stageField->getKey())->value($this->stageField->getValueColumn()))
-        ->toBeNull();
+        ->toBeNull()
+        ->and($opportunity->order_column)->toBeNull();
 });
 
 it('opens the edit action when a card is clicked', function (): void {
@@ -349,6 +417,37 @@ it('labels the contact select point of contact when adding an opportunity to a c
     view()->share('errors', new ViewErrorBag);
 
     expect($page->getSchema($page->getMountedActionSchemaName())->toHtml())->toContain('Point of Contact');
+});
+
+it('leaves the koc stage out of the edit slide-over and says where it comes from', function (): void {
+    $opportunity = opportunitiesBoardKocCard($this->user, $this->workspace, 'Krill sample', 'sample_pending');
+
+    $page = livewire(OpportunitiesBoard::class)
+        ->call('mountAction', 'edit', [], ['recordKey' => (string) $opportunity->id])
+        ->instance();
+
+    view()->share('errors', new ViewErrorBag);
+
+    $html = $page->getSchema($page->getMountedActionSchemaName())->toHtml();
+
+    expect($html)
+        ->not->toContain('KOC Stage')
+        ->toContain('Stage is mirrored from the KOC platform and is not editable here.');
+});
+
+it('prints no provenance line where the workspace declares no ladder', function (): void {
+    opportunitiesBoardDropField(opportunitiesBoardField(OpportunityField::KOC_STAGE));
+
+    $deal = opportunitiesBoardSalesCard($this->user, $this->workspace, 'Hand-made deal', 'Prospecting');
+
+    $page = livewire(OpportunitiesBoard::class)
+        ->call('mountAction', 'edit', [], ['recordKey' => (string) $deal->getKey()])
+        ->instance();
+
+    view()->share('errors', new ViewErrorBag);
+
+    expect($page->getSchema($page->getMountedActionSchemaName())->toHtml())
+        ->not->toContain('Stage is mirrored');
 });
 
 it('leaves the koc stage out of the quick create form because the column sets it', function (): void {
@@ -448,6 +547,37 @@ it('hides pitches by default and shows them under no response when accepted only
 
     expect($pitchLane)->toBe([$pitch->getKey()])
         ->and(opportunitiesBoardLadderCardIds($board))->toHaveCount(5);
+});
+
+it('says a filtered-out pitch is hidden rather than absent', function (): void {
+    $koc = opportunitiesBoardField(OpportunityField::KOC_STAGE);
+
+    $pitch = opportunitiesBoardKocCard($this->user, $this->workspace, 'Pitch never answered', 'no_response');
+
+    $component = livewire(OpportunitiesBoard::class);
+
+    expect(opportunitiesBoardCardIds($component->instance()->getBoard(), opportunitiesBoardOption($koc, 'no_response')->getKey()))
+        ->toBe([]);
+
+    $component
+        ->assertSee('1 collaboration hidden by the filter')
+        ->assertDontSee('No collaborations yet.');
+
+    $component->set('tableFilters.accepted_only.isActive', false);
+
+    $component
+        ->assertSee($pitch->name)
+        ->assertDontSee('hidden by the filter');
+});
+
+it('reads an empty workspace as empty rather than as filtered', function (): void {
+    $component = livewire(OpportunitiesBoard::class);
+
+    $component
+        ->assertSee('No collaborations yet.')
+        ->assertSee('Accepted collaborations only')
+        ->assertDontSee('hidden by the filter')
+        ->assertDontSee('flowforge-column');
 });
 
 it('keeps a sales opportunity off the koc board whether the toggle is on or off', function (): void {

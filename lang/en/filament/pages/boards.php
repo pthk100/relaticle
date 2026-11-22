@@ -13,6 +13,11 @@ return [
     'opportunities' => [
         'title' => 'Opportunities',
         'koc_caption' => 'KOC collaborations. This board mirrors the platform ladder, and a pitch stays in no response until the creator says yes.',
+        'empty' => [
+            'title' => 'No collaborations yet.',
+            'body' => 'A collaboration appears here when a creator says yes to a pitch. Pitches stay in no response, and switching off pitches hidden shows them.',
+            'hidden' => '{1} :count collaboration hidden by the filter|[2,*] :count collaborations hidden by the filter',
+        ],
         'actions' => [
             'add' => 'Add Opportunity',
             'edit' => 'Edit',

@@ -12,6 +12,7 @@ use App\Filament\Concerns\HasViewSwitcher;
 use App\Filament\Resources\OpportunityResource;
 use App\Filament\Resources\OpportunityResource\Filters\KocPipelineFilters;
 use App\Filament\Resources\OpportunityResource\Forms\OpportunityForm;
+use App\Filament\Resources\OpportunityResource\OpportunityBoard;
 use App\Models\CustomField;
 use App\Models\CustomFieldOption;
 use App\Models\Opportunity;
@@ -48,6 +49,11 @@ final class OpportunitiesBoard extends BoardResourcePage
 
     protected static string $resource = OpportunityResource::class;
 
+    protected string $view = 'filament.pages.opportunities-board';
+
+    /** @var array<string, int>|null */
+    private ?array $hiddenCards = null;
+
     /**
      * The collaboration ladder, in a workspace that declares one. In a brand
      * tenant's workspace this is the sales stage, and the board is its pipeline.
@@ -68,19 +74,58 @@ final class OpportunitiesBoard extends BoardResourcePage
         return $this->isKocLadder() ? (string) __('filament/pages/boards.opportunities.koc_caption') : null;
     }
 
+    /**
+     * An empty lane and an empty workspace are different facts, so the column says
+     * how many rows its own filter is holding back.
+     */
+    public function hiddenCardsInColumn(string $columnId): int
+    {
+        if (! $this->isKocLadder()) {
+            return 0;
+        }
+
+        $board = $this->getBoard();
+
+        if (! $board instanceof OpportunityBoard) {
+            return 0;
+        }
+
+        $this->hiddenCards ??= $board->hiddenRecordCounts();
+
+        return $this->hiddenCards[$columnId] ?? 0;
+    }
+
+    /**
+     * The empty block answers the board's own unfiltered rows, so a filter hiding
+     * the only pitch can never pass itself off as a workspace with no work.
+     */
+    public function showsEmptyLadder(): bool
+    {
+        if (! $this->isKocLadder()) {
+            return false;
+        }
+
+        $query = $this->getBoard()->getQuery();
+
+        return $query instanceof Builder && ! (clone $query)->exists();
+    }
+
+    protected function makeBoard(): OpportunityBoard
+    {
+        return OpportunityBoard::make($this)->query(fn (): ?Builder => $this->getBoardQuery());
+    }
+
     public function board(Board $board): Board
     {
         $columnField = $this->columnField();
 
-        if (! $columnField instanceof CustomField) {
-            abort(403);
-        }
+        abort_unless($columnField instanceof CustomField, 403);
 
         return $board
             ->query($this->boardQuery($columnField))
             ->recordTitleAttribute('name')
             ->columnIdentifier($columnField->getValueColumn())
-            ->positionIdentifier('order_column')
+            ->unless($this->isKocLadder(), fn (Board $board): Board => $board->positionIdentifier('order_column'))
             ->searchable(['name'])
             ->columns($this->getColumns())
             ->cardSchema($this->cardSchema())
@@ -114,7 +159,9 @@ final class OpportunitiesBoard extends BoardResourcePage
             return $query;
         }
 
-        return $query->whereNotNull('cfv.'.$valueColumn);
+        return $query
+            ->whereNotNull('cfv.'.$valueColumn)
+            ->orderByDesc('opportunities.updated_at');
     }
 
     /**
@@ -253,6 +300,11 @@ final class OpportunitiesBoard extends BoardResourcePage
         ?string $afterCardId = null,
         ?string $beforeCardId = null
     ): void {
+        // The platform owns a collaboration's rung, so a drop on the mirror never lands.
+        if ($this->isKocLadder()) {
+            return;
+        }
+
         $board = $this->getBoard();
         $query = $board->getQuery();
 
@@ -373,6 +425,10 @@ final class OpportunitiesBoard extends BoardResourcePage
 
         if (filled($columnId)) {
             $opportunity->saveCustomFieldValue($this->cardColumnField(), $columnId);
+        }
+
+        // The platform owns the rung, so a ladder card is never given a position.
+        if (filled($columnId) && ! $this->isKocLadder()) {
             $opportunity->order_column = (float) $this->getBoardPositionInColumn($columnId);
             $opportunity->saveQuietly();
         }

@@ -34,6 +34,9 @@ return [
         'deleted_at' => [
             'label' => 'Deleted At',
         ],
+        'koc_stage' => [
+            'provenance' => 'Stage is mirrored from the KOC platform and is not editable here.',
+        ],
     ],
 
     'filters' => [
