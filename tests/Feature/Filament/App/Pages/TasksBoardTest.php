@@ -312,3 +312,16 @@ it('links the sidebar to the board on the next page after the user opens it', fu
         ->assertOk()
         ->assertSee('href="'.TaskResource::getUrl('board').'"', escape: false);
 });
+
+/**
+ * The board names itself, because the topbar title is the same word on the list
+ * and on the board; a page with its own vocabulary for the board overrides it.
+ */
+it('names the board under the topbar title it shares with the list', function (): void {
+    $component = livewire(TasksBoard::class);
+
+    expect($component->instance()->getBoardName())->toBe('Tasks board')
+        ->and($component->instance()->getBoardCaption())->toBeNull();
+
+    $component->assertSee('fi-board-name', escape: false);
+});

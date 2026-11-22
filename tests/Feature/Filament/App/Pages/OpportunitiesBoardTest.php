@@ -866,9 +866,72 @@ it('explains on the board that it shows collaborations only', function (): void 
 
     $component = livewire(OpportunitiesBoard::class);
 
-    expect($component->instance()->getSubheading())->toBe($caption);
+    expect($component->instance()->getBoardCaption())->toBe($caption);
 
     $component->assertSee($caption);
+});
+
+/**
+ * The caption used to be the page's Filament subheading, which the board toolbar
+ * renders in the same row as the view switcher and the search field: at 1440 it
+ * started 16px right of the chip, wrapped to two lines and ran into the search
+ * field. The board header owns the line now, so the page has no subheading left
+ * for the toolbar to render.
+ */
+it('gives the caption its own line under the board name instead of the toolbar row', function (): void {
+    $component = livewire(OpportunitiesBoard::class);
+    $html = $component->html();
+
+    $name = strpos($html, 'fi-board-name');
+    $caption = strpos($html, 'fi-board-caption');
+
+    expect($component->instance()->getSubheading())->toBeNull()
+        ->and($name)->not->toBeFalse()
+        ->and($caption)->not->toBeFalse()
+        ->and($caption)->toBeGreaterThan($name);
+});
+
+it('names the ladder board, because the topbar title names the resource', function (): void {
+    $page = livewire(OpportunitiesBoard::class)->instance();
+
+    expect($page->getBoardName())->toBe(__('filament/pages/boards.opportunities.board_name.ladder'))
+        ->and($page->getSubheading())->toBeNull();
+});
+
+it('names a sales board after its pipeline and gives it no ladder caption', function (): void {
+    opportunitiesBoardDropField(opportunitiesBoardField(OpportunityField::KOC_STAGE));
+
+    $page = livewire(OpportunitiesBoard::class)->instance();
+
+    expect($page->getBoardName())->toBe(__('filament/pages/boards.opportunities.board_name.pipeline'))
+        ->and($page->getBoardCaption())->toBeNull();
+});
+
+/**
+ * Five lanes carrying the same sentence say nothing a reader can act on, and the
+ * archive-box glyph beside an empty lane reads as "archive this lane" on a board
+ * whose first verb is drag.
+ */
+it('says what fills each empty lane instead of repeating one sentence and an archive box', function (): void {
+    opportunitiesBoardKocCard($this->user, $this->workspace, 'Krill sample', 'sample_pending');
+
+    livewire(OpportunitiesBoard::class)
+        ->assertDontSee('No opportunities in this column')
+        ->assertSee(__('filament/pages/boards.opportunities.empty.lane.no_response'))
+        ->assertSee(__('filament/pages/boards.opportunities.empty.lane.shipped'))
+        ->assertSee(__('filament/pages/boards.opportunities.empty.lane.delivered'))
+        ->assertSee(__('filament/pages/boards.opportunities.empty.lane.fulfilled'))
+        ->assertDontSeeHtml('m20.25 7.5-.625 10.632a2.25');
+});
+
+it('lets a lane a workspace renamed say what fills it in that lane\'s own words', function (): void {
+    $koc = opportunitiesBoardField(OpportunityField::KOC_STAGE);
+
+    opportunitiesBoardKocCard($this->user, $this->workspace, 'Krill sample', 'sample_pending');
+    opportunitiesBoardOption($koc, 'shipped')->update(['name' => 'Shipped to the creator']);
+
+    livewire(OpportunitiesBoard::class)
+        ->assertSee('A card appears in Shipped to the creator when it reaches this stage.');
 });
 
 it('says what the toggle does in the caption, not only what the board is', function (): void {

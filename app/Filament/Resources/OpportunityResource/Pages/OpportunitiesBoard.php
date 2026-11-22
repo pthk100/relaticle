@@ -71,12 +71,70 @@ final class OpportunitiesBoard extends BoardResourcePage
     }
 
     /**
-     * A row that is silently absent from a board is the failure mode this
-     * project keeps paying for, so the ladder board says what it holds.
+     * The topbar names the resource, which is the same word on the list and on the
+     * board, so the board names itself: the collaboration ladder in a workspace
+     * that declares one, the sales pipeline otherwise.
      */
-    public function getSubheading(): ?string
+    public function getBoardName(): string
+    {
+        return $this->isKocLadder()
+            ? (string) __('filament/pages/boards.opportunities.board_name.ladder')
+            : (string) __('filament/pages/boards.opportunities.board_name.pipeline');
+    }
+
+    /**
+     * A row that is silently absent from a board is the failure mode this project
+     * keeps paying for, so the ladder board says what it holds, on the line under
+     * its own name rather than as the page subheading the toolbar would print in
+     * the row it shares with the search field.
+     */
+    public function getBoardCaption(): ?string
     {
         return $this->isKocLadder() ? (string) __('filament/pages/boards.opportunities.koc_caption') : null;
+    }
+
+    /**
+     * An empty lane states what fills it. Five lanes repeating "No opportunities in
+     * this column" tell a reader nothing they can act on; the ladder's rungs are
+     * known vocabulary, so each sentence is the move that puts a card there. A
+     * lane a workspace named itself keeps its own word.
+     */
+    public function emptyLaneHint(string $columnId): ?string
+    {
+        $option = $this->ladderOptions()->first(
+            fn (array $option): bool => (string) $option['id'] === $columnId,
+        );
+
+        if (! is_array($option)) {
+            return null;
+        }
+
+        $lane = (string) $option['name'];
+
+        $hint = $this->isKocLadder() ? $this->kocLadderEmptyHints()[$lane] ?? null : null;
+
+        // The lane's own word: a rung whose name is not one of the five passes
+        // through as the workspace typed it, which is what a reader should see.
+        return $hint ?? __('filament/pages/boards.opportunities.empty.lane.other', [
+            'lane' => $lane,
+        ]);
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    private function kocLadderEmptyHints(): array
+    {
+        // Keyed by the option NAME the platform writes, which is the vocabulary
+        // OpportunityField::KOC_STAGE_VALUES lists, never by the label a person
+        // reads: the stored value is what a lane's id resolves to.
+        return [
+            'no_response' => (string) __('filament/pages/boards.opportunities.empty.lane.no_response'),
+            'sample_pending' => (string) __('filament/pages/boards.opportunities.empty.lane.sample_pending'),
+            'shipped' => (string) __('filament/pages/boards.opportunities.empty.lane.shipped'),
+            'delivered' => (string) __('filament/pages/boards.opportunities.empty.lane.delivered'),
+            'fulfilled' => (string) __('filament/pages/boards.opportunities.empty.lane.fulfilled'),
+        ];
     }
 
     /**

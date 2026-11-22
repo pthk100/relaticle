@@ -1244,8 +1244,33 @@ html.fi-record-stacked .fi-record-layout {
     .fi-board-header {
         @apply flex items-center gap-x-4 border-b border-gray-200/60 bg-white px-4 py-2 lg:px-6 dark:border-white/10 dark:bg-gray-900;
 
-        & > div:not(.fi-view-switcher) {
-            @apply min-w-0 flex-1;
+        /* The toolbar keeps its own intrinsic width; the identity block takes what is
+           left, so a long caption can never be laid out on top of the search field. */
+        & > div:not(.fi-view-switcher):not(.fi-board-identity) {
+            @apply min-w-0 flex-none;
+        }
+
+        /* The board's own name, under the topbar title it shares with the list, and
+           the caption on the line beneath it. Its own flex item, so the caption can
+           never be laid out in the toolbar's row beside the search field. */
+        .fi-board-identity {
+            @apply flex min-w-0 flex-1 flex-col;
+        }
+
+        .fi-board-name {
+            @apply truncate text-sm font-semibold text-gray-950 dark:text-white;
+        }
+
+        /* Thirteen pixels, two lines at most: the caption explains the board, it is
+           not the board. Clamped rather than allowed to push the toolbar down. */
+        .fi-board-caption {
+            @apply mt-0.5 text-gray-500 dark:text-gray-400;
+            display: -webkit-box;
+            overflow: hidden;
+            font-size: 13px;
+            line-height: 20px;
+            -webkit-box-orient: vertical;
+            -webkit-line-clamp: 2;
         }
 
         /* The package reserves this slot for a heading the topbar already shows. */

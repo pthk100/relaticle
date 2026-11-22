@@ -34,7 +34,37 @@ trait HasViewSwitcher
             'boardToolbar' => $header,
             'heading' => $this->getHeading(),
             'viewSwitcher' => $this->getViewSwitcher(),
+            'boardName' => $this->getBoardName(),
+            'boardCaption' => $this->getBoardCaption(),
         ]);
+    }
+
+    /**
+     * The board names itself under the topbar title. The topbar shows the page
+     * title ("Opportunities"), which is the same word on the list and on the
+     * board, so this line is the only text on the surface that says which of the
+     * two views a reader is looking at. A board with its own vocabulary overrides
+     * this.
+     */
+    public function getBoardName(): string
+    {
+        $heading = $this->getHeading();
+
+        return __('filament/pages/boards.board_name_default', [
+            'resource' => $heading instanceof Htmlable ? strip_tags($heading->toHtml()) : (string) $heading,
+        ]);
+    }
+
+    /**
+     * A board that has something to explain about its own query says it here, on
+     * the line under its name. The page's Filament subheading is not used: the
+     * board toolbar renders that inside the row it shares with the view switcher
+     * and the search field, which is where a caption wrapped to two lines and ran
+     * into the search field.
+     */
+    public function getBoardCaption(): ?string
+    {
+        return null;
     }
 
     public function getViewSwitcher(): ?Htmlable
