@@ -12,6 +12,7 @@ use App\Models\Company;
 use App\Models\CustomField;
 use App\Models\CustomFieldOption;
 use App\Models\Opportunity;
+use App\Models\People;
 use App\Models\Task;
 use App\Models\User;
 use App\Models\Workspace;
@@ -339,6 +340,89 @@ it('leaves a follow-up the team has closed off the card', function (): void {
     expect($html)
         ->toContain('Somchai')
         ->not->toContain('follow-up');
+});
+
+/**
+ * The card's own tag, read out of the page so an assertion about what a line is
+ * styled with cannot drift onto another element that happens to carry the class.
+ */
+function opportunitiesBoardCardTag(string $html, string $attribute): string
+{
+    preg_match('/<[a-z0-9]+[^>]*'.preg_quote($attribute, '/').'[^>]*>/i', $html, $matches);
+
+    return $matches[0] ?? '';
+}
+
+/**
+ * The composed record name is the CRM's search surface and is never parsed, so a
+ * card leads with the two facts it can read structurally: the creator the
+ * follow-up is about, and the product line. The name survives on the tooltip, so
+ * hover and copy still answer the search string.
+ */
+it('leads a collaboration card with the handle and the product line and keeps the composed name on hover', function (): void {
+    $company = Company::factory()->recycle([$this->user, $this->workspace])->create(['name' => 'Pethealer']);
+    $contact = People::factory()->recycle([$this->user, $this->workspace])->create(['name' => 'chanika2626']);
+    $sku = declareOperationsField($this->workspace, OpportunityField::PRODUCT_SKU);
+    $koc = opportunitiesBoardField(OpportunityField::KOC_STAGE);
+
+    $opportunity = Opportunity::factory()
+        ->recycle([$this->user, $this->workspace])
+        ->create([
+            'name' => 'Pethealer-0371 | PETHEA-ANTARCTIC-KRILL - @chanika2626',
+            'company_id' => $company->getKey(),
+            'contact_id' => $contact->getKey(),
+            'custom_fields' => [
+                $koc->code => opportunitiesBoardOption($koc, 'sample_pending')->getKey(),
+                $sku->code => 'PETHEA-ANTARCTIC-KRILL',
+            ],
+        ]);
+
+    $html = livewire(OpportunitiesBoard::class)->html();
+
+    expect(opportunitiesBoardCardTag($html, 'data-card-handle'))
+        ->toContain('text-sm')
+        ->toContain('font-semibold')
+        ->toContain('truncate')
+        ->and(opportunitiesBoardCardTag($html, 'data-card-product'))
+        ->toContain('truncate')
+        ->toContain('whitespace-nowrap')
+        ->and($html)
+        ->toContain('>@chanika2626<')
+        ->toContain('>Pethealer · PETHEA-ANTARCTIC-KRILL<')
+        ->toContain('title="Pethealer-0371 | PETHEA-ANTARCTIC-KRILL - @chanika2626"');
+
+    $handleAt = strpos($html, '>@chanika2626<');
+    $productAt = strpos($html, '>Pethealer · PETHEA-ANTARCTIC-KRILL<');
+
+    expect($handleAt)->toBeInt()
+        ->and($productAt)->toBeInt()
+        ->and($handleAt)->toBeLessThan((int) $productAt)
+        ->and($opportunity->fresh()?->name)
+        ->toBe('Pethealer-0371 | PETHEA-ANTARCTIC-KRILL - @chanika2626');
+});
+
+it('shows an em dash where a collaboration card has no handle instead of a blank line', function (): void {
+    $opportunity = opportunitiesBoardKocCard($this->user, $this->workspace, 'Krill | SKU-1 - @arteereview', 'sample_pending');
+    $opportunity->update(['name' => 'No creator wired yet']);
+
+    $html = livewire(OpportunitiesBoard::class)->html();
+
+    expect(opportunitiesBoardCardTag($html, 'data-card-handle'))->not->toBe('')
+        ->and($html)->toContain('>—<')
+        ->and($html)->not->toContain('data-card-product');
+});
+
+it('leaves a sales card titled by its own name, with no handle line', function (): void {
+    opportunitiesBoardDropField(opportunitiesBoardField(OpportunityField::KOC_STAGE));
+
+    opportunitiesBoardSalesCard($this->user, $this->workspace, 'Hand-made deal', 'Prospecting');
+
+    $html = livewire(OpportunitiesBoard::class)->html();
+
+    expect($html)
+        ->toContain('Hand-made deal')
+        ->not->toContain('data-card-handle')
+        ->not->toContain('data-card-product');
 });
 
 it('names the operator mirror on a collaboration that has no open follow-up', function (): void {

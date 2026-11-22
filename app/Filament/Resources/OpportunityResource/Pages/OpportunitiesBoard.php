@@ -136,7 +136,9 @@ final class OpportunitiesBoard extends BoardResourcePage
 
     protected function makeBoard(): OpportunityBoard
     {
-        return OpportunityBoard::make($this)->query(fn (): ?Builder => $this->getBoardQuery());
+        return OpportunityBoard::make($this)
+            ->query(fn (): ?Builder => $this->getBoardQuery())
+            ->collaborationCards($this->isKocLadder());
     }
 
     public function board(Board $board): Board
@@ -197,7 +199,7 @@ final class OpportunitiesBoard extends BoardResourcePage
     private function cardRelations(): array
     {
         return $this->isKocLadder()
-            ? ['tasks.assignees', 'tasks.customFieldValues.customField', 'customFieldValues.customField']
+            ? ['tasks.assignees', 'tasks.customFieldValues.customField', 'customFieldValues.customField', 'contact.customFieldValues.customField', 'company']
             : ['company.media', 'contact'];
     }
 

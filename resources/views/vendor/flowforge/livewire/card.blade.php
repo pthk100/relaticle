@@ -1,7 +1,14 @@
 @props(['columnId', 'record'])
 
 {{-- Published copy of flowforge::livewire.card: the package marks every card
-     x-sortable-item, and a board with no position identifier must mark none. --}}
+     x-sortable-item, and a board with no position identifier must mark none.
+
+     It also decides what a card leads with. A board whose record title is a
+     search string (the KOC ladder's `{Brand} | {SKU} - @{handle}`) renders the
+     two facts that string is made of, read off the record, and keeps the string
+     on the card's title attribute where hover and copy can still reach it. A
+     board whose title is already a label (the sales board, the tasks board)
+     renders exactly what the package ships. --}}
 
 @php
     $processedRecordActions = $this->getBoard()->getBoardRecordActions($record);
@@ -33,6 +40,14 @@
             hasNestedClickEventHandler: true,
         )
         : null;
+
+    // The board decides whether its title is a search string; null means "use the
+    // title as the card's content", which is every board except the ladder. The
+    // derivation lives on the board, not on the Livewire page, so nothing here
+    // widens the component's browser-callable surface.
+    $identity = $record['model'] instanceof \App\Models\Opportunity
+        ? $this->getBoard()?->cardIdentity($record['model'])
+        : null;
 @endphp
 
 <div
@@ -47,6 +62,9 @@
         x-sortable-item="{{ $record['id'] }}"
     @endif
     data-card-id="{{ $record['id'] }}"
+    @if($identity !== null)
+        title="{{ $record['title'] }}"
+    @endif
     @if($hasPositionIdentifier)
         x-sortable-handle
     @endif
@@ -54,20 +72,36 @@
 >
     <div class="flowforge-card-content">
         <div class="flex items-start justify-between mb-2">
-            <h4 class="text-sm font-semibold text-gray-900 dark:text-white p-3"
-                @if($hasCardAction && $cardAction && !$hasCardActionUrl)
-                    wire:click="mountAction('{{ $cardAction }}', [], @js(['recordKey' => $record['id']]))"
-                style="cursor: pointer;"
-                @endif
-            >
-                @if($hasCardActionUrl)
-                    <a {{ $cardActionHref }} class="block">
+            @if($identity === null)
+                <h4 class="text-sm font-semibold text-gray-900 dark:text-white p-3"
+                    @if($hasCardAction && $cardAction && !$hasCardActionUrl)
+                        wire:click="mountAction('{{ $cardAction }}', [], @js(['recordKey' => $record['id']]))"
+                    style="cursor: pointer;"
+                    @endif
+                >
+                    @if($hasCardActionUrl)
+                        <a {{ $cardActionHref }} class="block">
+                            {{ $record['title'] }}
+                        </a>
+                    @else
                         {{ $record['title'] }}
-                    </a>
-                @else
-                    {{ $record['title'] }}
-                @endif
-            </h4>
+                    @endif
+                </h4>
+            @else
+                {{-- Two lines, never three: the creator is what an operator scans for,
+                     and the product line is one ellipsised row however long the SKU. --}}
+                <div class="min-w-0 flex-1 p-3"
+                     @if($hasCardAction && $cardAction && !$hasCardActionUrl)
+                         wire:click="mountAction('{{ $cardAction }}', [], @js(['recordKey' => $record['id']]))"
+                     style="cursor: pointer;"
+                    @endif
+                >
+                    <h4 data-card-handle class="truncate text-sm font-semibold text-gray-900 dark:text-white">@if($hasCardActionUrl)<a {{ $cardActionHref }} class="block truncate">{{ $identity['handle'] ?? '—' }}</a>@else{{ $identity['handle'] ?? '—' }}@endif</h4>
+                    @if(filled($identity['product'] ?? null))
+                        <p data-card-product class="mt-0.5 truncate whitespace-nowrap text-[0.8125rem] text-gray-500 dark:text-gray-400">{{ $identity['product'] }}</p>
+                    @endif
+                </div>
+            @endif
 
             @if($hasActions)
                 <div class="m-3">
