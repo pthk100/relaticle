@@ -10,6 +10,7 @@ use App\Filament\Components\Infolists\RecordChipEntry;
 use App\Filament\Components\Tables\Filters\RecordSelectFilter;
 use App\Filament\Concerns\HasViewSwitcher;
 use App\Filament\Resources\OpportunityResource;
+use App\Filament\Resources\OpportunityResource\Filters\KocPipelineFilters;
 use App\Filament\Resources\OpportunityResource\Forms\OpportunityForm;
 use App\Models\CustomField;
 use App\Models\CustomFieldOption;
@@ -24,6 +25,7 @@ use Filament\Support\Enums\TextSize;
 use Filament\Support\Enums\Width;
 use Filament\Support\Facades\FilamentTimezone;
 use Filament\Support\Icons\Heroicon;
+use Filament\Tables\Filters\BaseFilter;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Query\JoinClause;
 use Illuminate\Support\Collection;
@@ -153,22 +155,31 @@ final class OpportunitiesBoard extends BoardResourcePage
                         $record->delete();
                     }),
             ])
-            ->filters([
-                RecordSelectFilter::make('companies')
-                    ->label(__('filament/pages/boards.opportunities.filters.company'))
-                    ->relationship('company', 'name')
-                    ->searchable()
-                    ->preload()
-                    ->multiple(),
-                RecordSelectFilter::make('contacts')
-                    ->label(__('filament/pages/boards.opportunities.filters.contact'))
-                    ->relationship('contact', 'name')
-                    ->searchable()
-                    ->preload()
-                    ->multiple(),
-            ])
+            ->filters($this->boardFilters())
             ->filtersFormWidth(Width::Medium)
             ->headerToolbar();
+    }
+
+    /**
+     * @return list<BaseFilter>
+     */
+    private function boardFilters(): array
+    {
+        return [
+            RecordSelectFilter::make('companies')
+                ->label(__('filament/pages/boards.opportunities.filters.company'))
+                ->relationship('company', 'name')
+                ->searchable()
+                ->preload()
+                ->multiple(),
+            RecordSelectFilter::make('contacts')
+                ->label(__('filament/pages/boards.opportunities.filters.contact'))
+                ->relationship('contact', 'name')
+                ->searchable()
+                ->preload()
+                ->multiple(),
+            ...KocPipelineFilters::all(acceptedOnlyByDefault: true),
+        ];
     }
 
     /**

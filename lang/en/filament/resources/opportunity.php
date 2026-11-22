@@ -36,6 +36,11 @@ return [
         ],
     ],
 
+    'filters' => [
+        'koc_stage' => 'KOC stage',
+        'accepted_only' => 'Accepted collaborations only. Pitches hidden',
+    ],
+
     'pages' => [
         'list' => [
             'actions' => [

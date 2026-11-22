@@ -19,7 +19,7 @@ return [
                 'App\Filament\Pages\CreateWorkspace::getWorkspaceFormComponents' => 62,
                 'App\Filament\Pages\Workspace\ActivityLog::table' => 115,
                 'App\Filament\Resources\CompanyResource::table' => 70,
-                'App\Filament\Resources\OpportunityResource\Pages\OpportunitiesBoard::board' => 120,
+                'App\Filament\Resources\OpportunityResource\Pages\OpportunitiesBoard::board' => 107,
                 'App\Filament\Resources\PeopleResource::table' => 62,
                 'App\Filament\Resources\TaskResource\Pages\TasksBoard::board' => 118,
                 'App\Livewire\App\AccessTokens\ManageOAuthConnectors::table' => 65,

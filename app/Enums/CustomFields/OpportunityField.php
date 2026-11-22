@@ -30,12 +30,17 @@ enum OpportunityField: string
      * @var list<string>
      */
     public const array KOC_STAGE_VALUES = [
-        'no_response',
+        self::KOC_STAGE_PITCH,
         'sample_pending',
         'shipped',
         'delivered',
         'fulfilled',
     ];
+
+    /**
+     * A pitch nobody has agreed to yet, so the pipeline views hide it by default.
+     */
+    public const string KOC_STAGE_PITCH = 'no_response';
 
     /**
      * @return string[]|null

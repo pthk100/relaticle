@@ -8,6 +8,7 @@ use App\Enums\CreationSource;
 use App\Enums\CrmEntity;
 use App\Filament\Concerns\RemembersViewMode;
 use App\Filament\Exports\OpportunityExporter;
+use App\Filament\Resources\OpportunityResource\Filters\KocPipelineFilters;
 use App\Filament\Resources\OpportunityResource\Forms\OpportunityForm;
 use App\Filament\Resources\OpportunityResource\Pages\ListOpportunities;
 use App\Filament\Resources\OpportunityResource\Pages\OpportunitiesBoard;
@@ -90,6 +91,7 @@ final class OpportunityResource extends Resource
                     ->options(CreationSource::class)
                     ->multiple(),
                 TrashedFilter::make(),
+                ...KocPipelineFilters::all(),
             ])
             ->recordActions([
                 ActionGroup::make([
