@@ -57,7 +57,11 @@ final class KocPipelineFilters
     {
         return SelectFilter::make(OpportunityField::KOC_STAGE->value)
             ->label(__('filament/resources/opportunity.filters.koc_stage'))
-            ->options(fn (): array => $field->options->pluck('name', 'id')->all())
+            ->options(fn (): array => $field->options
+                ->mapWithKeys(fn (CustomFieldOption $option): array => [
+                    (string) $option->getKey() => OpportunityField::kocStageLabel((string) $option->getAttribute('name')),
+                ])
+                ->all())
             ->query(function (Builder $query, array $data) use ($field): Builder {
                 $optionId = $data['value'] ?? null;
 

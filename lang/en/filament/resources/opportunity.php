@@ -36,6 +36,16 @@ return [
         ],
         'koc_stage' => [
             'provenance' => 'Stage is mirrored from the KOC platform and is not editable here.',
+            // The option row's name is the platform's machine vocabulary (the
+            // projector writes it and the API resolves it back to an option
+            // id), so the label a person reads is mapped here, at render time.
+            'options' => [
+                'no_response' => 'Pitch sent',
+                'sample_pending' => 'Sample pending',
+                'shipped' => 'Sample shipped',
+                'delivered' => 'Sample delivered',
+                'fulfilled' => 'Collaboration fulfilled',
+            ],
         ],
     ],
 

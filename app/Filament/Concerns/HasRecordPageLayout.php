@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Filament\Concerns;
 
 use App\Enums\CrmEntity;
+use App\Enums\CustomFields\OpportunityField;
 use App\Enums\CustomFieldType;
 use App\Filament\Actions\CreateTaskAction;
 use App\Filament\Components\Infolists\RecordChipEntry;
@@ -238,6 +239,10 @@ trait HasRecordPageLayout
         $customFieldIcons = $customFields->getFields()
             ->mapWithKeys(fn (CustomField $field): array => [$field->getFieldName() => CustomFieldType::tryFrom($field->type)?->icon()]);
 
+        $kocStageEntry = $customFields->getFields()
+            ->firstWhere('code', OpportunityField::KOC_STAGE->value)
+            ?->getFieldName();
+
         $entries = collect($this->nativeDetailEntries())
             ->concat($customFields->values()->map(fn (Entry $entry): Entry => $entry
                 ->beforeLabel(Icon::make($customFieldIcons->get($entry->getName()) ?? Heroicon::OutlinedSquares2x2))))
@@ -245,6 +250,9 @@ trait HasRecordPageLayout
                 ->inlineLabel()
                 ->columnSpan(['default' => 'full', 'lg' => 'full'])
                 ->placeholder(__('filament/record-page.empty')))
+            ->map(fn (Entry $entry): Entry => $entry->getName() === $kocStageEntry
+                ? $entry->formatStateUsing(fn (?string $state): ?string => $state === null ? null : OpportunityField::kocStageLabel($state))
+                : $entry)
             ->values();
 
         $visible = $entries->take(self::VISIBLE_DETAIL_COUNT)->all();

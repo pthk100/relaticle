@@ -31,16 +31,54 @@ enum OpportunityField: string
      */
     public const array KOC_STAGE_VALUES = [
         self::KOC_STAGE_PITCH,
-        'sample_pending',
-        'shipped',
-        'delivered',
-        'fulfilled',
+        self::KOC_STAGE_SAMPLE_PENDING,
+        self::KOC_STAGE_SHIPPED,
+        self::KOC_STAGE_DELIVERED,
+        self::KOC_STAGE_FULFILLED,
     ];
 
     /**
      * A pitch nobody has agreed to yet, so the pipeline views hide it by default.
      */
     public const string KOC_STAGE_PITCH = 'no_response';
+
+    public const string KOC_STAGE_SAMPLE_PENDING = 'sample_pending';
+
+    public const string KOC_STAGE_SHIPPED = 'shipped';
+
+    public const string KOC_STAGE_DELIVERED = 'delivered';
+
+    public const string KOC_STAGE_FULFILLED = 'fulfilled';
+
+    /**
+     * The rung a person reads, by the value the platform writes.
+     *
+     * The stored option NAME is the platform's own vocabulary: the projector
+     * posts `sample_pending` and the API resolves that name back to an option
+     * id, so a label cannot live in `custom_field_options.name`. It is mapped
+     * here, at render time, and the stored value never moves.
+     *
+     * @return array<string, string>
+     */
+    public static function kocStageLabels(): array
+    {
+        return [
+            self::KOC_STAGE_PITCH => __('filament/resources/opportunity.fields.koc_stage.options.no_response'),
+            self::KOC_STAGE_SAMPLE_PENDING => __('filament/resources/opportunity.fields.koc_stage.options.sample_pending'),
+            self::KOC_STAGE_SHIPPED => __('filament/resources/opportunity.fields.koc_stage.options.shipped'),
+            self::KOC_STAGE_DELIVERED => __('filament/resources/opportunity.fields.koc_stage.options.delivered'),
+            self::KOC_STAGE_FULFILLED => __('filament/resources/opportunity.fields.koc_stage.options.fulfilled'),
+        ];
+    }
+
+    /**
+     * A name outside the ladder passes through unchanged: an operator who
+     * renamed an option already wrote the words a person should read.
+     */
+    public static function kocStageLabel(string $value): string
+    {
+        return self::kocStageLabels()[$value] ?? $value;
+    }
 
     /**
      * @return string[]|null
@@ -151,11 +189,11 @@ enum OpportunityField: string
                 'Closed Lost' => '#6b7280',           // Silver Acceptance - Respectful closure
             ],
             self::KOC_STAGE => [
-                'no_response' => '#6b7280',
-                'sample_pending' => '#a5b4fc',
-                'shipped' => '#eab308',
-                'delivered' => '#0d9488',
-                'fulfilled' => '#059669',
+                self::KOC_STAGE_PITCH => '#6b7280',
+                self::KOC_STAGE_SAMPLE_PENDING => '#a5b4fc',
+                self::KOC_STAGE_SHIPPED => '#eab308',
+                self::KOC_STAGE_DELIVERED => '#0d9488',
+                self::KOC_STAGE_FULFILLED => '#059669',
             ],
             default => null,
         };

@@ -273,9 +273,16 @@ it('draws the koc lanes from the workspace options and puts each collaboration i
 
     $board = getOpportunityBoard();
 
-    expect(opportunitiesBoardColumnLabels($board))->toEqualCanonicalizing(
-        $koc->options->pluck('name')->all(),
-    )->and(opportunitiesBoardCardIds($board, opportunitiesBoardOption($koc, 'sample_pending')->getKey()))
+    // The lane a person reads is the rung's label; the option row keeps the
+    // platform's vocabulary, because the projector writes it.
+    expect(opportunitiesBoardColumnLabels($board))->toEqualCanonicalizing([
+        'Pitch sent',
+        'Sample pending',
+        'Sample shipped',
+        'Sample delivered',
+        'Collaboration fulfilled',
+    ])->not->toContain('sample_pending')
+        ->and(opportunitiesBoardCardIds($board, opportunitiesBoardOption($koc, 'sample_pending')->getKey()))
         ->toContain($pending->getKey())
         ->and(opportunitiesBoardCardIds($board, opportunitiesBoardOption($koc, 'fulfilled')->getKey()))
         ->toContain($fulfilled->getKey());
@@ -946,15 +953,15 @@ it("offers the workspace's own koc stage options in the stage filter", function 
 
     $filter = getOpportunityBoard()->getBoardFilters()['koc_stage'];
 
-    $stored = CustomFieldOption::query()
-        ->where('custom_field_id', $koc->getKey())
-        ->pluck('name', 'id')
-        ->sortKeys()
-        ->all();
+    $options = collect($filter->getFormField()->getOptions());
 
     expect($filter)->toBeInstanceOf(SelectFilter::class)
         ->and($filter->getLabel())->toBe('KOC stage')
-        ->and(collect($filter->getFormField()->getOptions())->sortKeys()->all())->toBe($stored);
+        // The operator renamed a rung, so the workspace's own words win.
+        ->and($options[opportunitiesBoardOption($koc, 'Shipped to the creator')->getKey()])->toBe('Shipped to the creator')
+        // A rung nobody renamed reads as its label, never its machine value.
+        ->and($options[opportunitiesBoardOption($koc, 'sample_pending')->getKey()])->toBe('Sample pending')
+        ->and($options->values()->all())->not->toContain('sample_pending');
 });
 
 it('narrows the board to the koc stage an operator picks', function (): void {
@@ -1004,9 +1011,13 @@ it('opens the koc board in a workspace that declares no sales stage field', func
 
     $board = getOpportunityBoard();
 
-    expect(opportunitiesBoardColumnLabels($board))->toEqualCanonicalizing(
-        opportunitiesBoardField(OpportunityField::KOC_STAGE)->options->pluck('name')->all(),
-    )->and(opportunitiesBoardCardIds($board, opportunitiesBoardOption(opportunitiesBoardField(OpportunityField::KOC_STAGE), 'delivered')->getKey()))
+    expect(opportunitiesBoardColumnLabels($board))->toEqualCanonicalizing([
+        'Pitch sent',
+        'Sample pending',
+        'Sample shipped',
+        'Sample delivered',
+        'Collaboration fulfilled',
+    ])->and(opportunitiesBoardCardIds($board, opportunitiesBoardOption(opportunitiesBoardField(OpportunityField::KOC_STAGE), 'delivered')->getKey()))
         ->toContain($opportunity->getKey());
 });
 

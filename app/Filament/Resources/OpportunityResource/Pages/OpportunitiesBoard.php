@@ -637,7 +637,7 @@ final class OpportunitiesBoard extends BoardResourcePage
     {
         return $this->ladderOptions()->map(fn (array $option): Column => Column::make((string) $option['id'])
             ->color($option['color'])
-            ->label($option['name'])
+            ->label($option['label'])
         )->toArray();
     }
 
@@ -755,7 +755,11 @@ final class OpportunitiesBoard extends BoardResourcePage
     }
 
     /**
-     * @return Collection<int, array{id: mixed, custom_field_id: mixed, name: mixed, color: string}>
+     * The lane a person reads: the ladder's rungs are stored in the platform's
+     * machine vocabulary, so the option's name is mapped to its label. A sales
+     * pipeline's option names are already the words to print.
+     *
+     * @return Collection<int, array{id: mixed, custom_field_id: mixed, name: mixed, label: string, color: string}>
      */
     private function ladderOptions(): Collection
     {
@@ -766,11 +770,15 @@ final class OpportunitiesBoard extends BoardResourcePage
         }
 
         $colorsEnabled = $field->settings->enable_option_colors ?? false;
+        $kocLadder = $this->isKocLadder();
 
         return $field->options->map(fn (CustomFieldOption $option): array => [
             'id' => $option->getKey(),
             'custom_field_id' => $option->getAttribute('custom_field_id'),
             'name' => $option->getAttribute('name'),
+            'label' => $kocLadder
+                ? OpportunityCustomField::kocStageLabel((string) $option->getAttribute('name'))
+                : (string) $option->getAttribute('name'),
             'color' => $colorsEnabled ? ($option->settings->color ?? 'gray') : 'gray',
         ]);
     }
