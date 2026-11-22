@@ -37,7 +37,7 @@ return [
     'platform' => [
         'api_key' => env('PLATFORM_API_KEY'),
         'service_user_email' => env('PLATFORM_SERVICE_USER_EMAIL', 'platform@relaticle.invalid'),
-        'service_user_name' => env('PLATFORM_SERVICE_USER_NAME', 'Platform Provisioning'),
+        'service_user_name' => env('PLATFORM_SERVICE_USER_NAME', 'The platform'),
 
         /*
         | The console that owns tenant sign-in, or unset for upstream self-host.

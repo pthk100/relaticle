@@ -36,10 +36,24 @@ trait HasCreator
 
     /**
      * Determine if the system created the record.
+     *
+     * The platform's own service identity counts as the system even though it reaches us over
+     * the REST API: a projected row does have an author, and that author is not a colleague.
      */
     public function isSystemCreated(): bool
     {
-        return in_array($this->creation_source, CreationSource::automated(), true);
+        return $this->creatorIsPlatformServiceUser()
+            || in_array($this->creation_source, CreationSource::automated(), true);
+    }
+
+    /**
+     * Whether the platform wrote this record, through the identity it signs as.
+     */
+    public function creatorIsPlatformServiceUser(): bool
+    {
+        $creator = $this->creator;
+
+        return $creator instanceof User && $creator->isPlatformServiceUser();
     }
 
     /**
@@ -57,9 +71,12 @@ trait HasCreator
     protected function createdBy(): Attribute
     {
         return Attribute::make(
-            get: fn (): string => $this->isSystemCreated() ?
-                "⊙ {$this->creation_source->getLabel()}" :
-                $this->creator?->name ?? 'Former Member', // @phpstan-ignore nullsafe.neverNull (creator_id can reference a deleted user)
+            get: fn (): string => match (true) {
+                $this->creatorIsPlatformServiceUser() => '⊙ '.User::PLATFORM_SERVICE_USER_LABEL,
+                $this->isSystemCreated() => "⊙ {$this->creation_source->getLabel()}",
+                // @phpstan-ignore nullsafe.neverNull (creator_id can reference a deleted user)
+                default => $this->creator?->name ?? 'Former Member',
+            },
         );
     }
 }

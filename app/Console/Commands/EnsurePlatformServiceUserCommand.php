@@ -38,7 +38,7 @@ final class EnsurePlatformServiceUserCommand extends Command
         $isNew = ! $user->exists;
 
         $user->fill([
-            'name' => is_string($name) && $name !== '' ? $name : 'Platform Provisioning',
+            'name' => is_string($name) && $name !== '' ? $name : 'The platform',
             'email_verified_at' => $user->email_verified_at ?? now(),
         ]);
 

@@ -42,22 +42,11 @@ final readonly class WorkspacePolicy
      */
     public function create(User $user): bool
     {
-        if ($this->isPlatformServiceUser($user)) {
+        if ($user->isPlatformServiceUser()) {
             return true;
         }
 
         return $user->ownedWorkspaces()->count() < (int) config('relaticle.workspaces.max_owned_per_user');
-    }
-
-    /**
-     * Whether this user is the platform's provisioning identity, which owns
-     * workspaces on behalf of tenants rather than on its own behalf.
-     */
-    private function isPlatformServiceUser(User $user): bool
-    {
-        $email = config('relaticle.platform.service_user_email');
-
-        return is_string($email) && $email !== '' && $user->email === $email;
     }
 
     /**

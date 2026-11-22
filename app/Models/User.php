@@ -117,6 +117,25 @@ final class User extends Authenticatable implements FilamentUser, HasAvatar, Has
 
     public const int SOCIAL_SIGNUP_WINDOW_SECONDS = 60;
 
+    /**
+     * What the CRM shows where a record the platform wrote would otherwise name a person.
+     * Kept in step with `relaticle.platform.service_user_name`'s default by a test, because
+     * the account's own name is editable and a renamed account must not change this word.
+     */
+    public const string PLATFORM_SERVICE_USER_LABEL = 'The platform';
+
+    /**
+     * Whether this is the identity the platform signs as. Matched on the configured address,
+     * which is exactly how `platform:service-user` keys the account, so an account renamed or
+     * re-seeded by that command still answers true.
+     */
+    public function isPlatformServiceUser(): bool
+    {
+        $email = config('relaticle.platform.service_user_email');
+
+        return is_string($email) && $email !== '' && $this->email === $email;
+    }
+
     /** @var array<string, bool> */
     private array $ownershipByWorkspaceId = [];
 
