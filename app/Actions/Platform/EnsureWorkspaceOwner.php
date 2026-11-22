@@ -10,11 +10,11 @@ use App\Models\Workspace;
 /**
  * Makes the tenant's own identity the OWNER of a platform-provisioned workspace.
  *
- * Fork addition — see NOTICE.
+ * Fork addition; see NOTICE.
  *
  * Why this exists: the first cut of the provisioning seam created every workspace
  * under the ONE shared platform service user (`platform@relaticle.invalid`). The
- * tenant therefore had a workspace but no identity of its own — nothing to broker
+ * tenant therefore had a workspace but no identity of its own: nothing to broker
  * a session AS, and every tenant's workspace owned by the same row. That is the
  * gap the "one signup only" card closes (`t_5df176cd`): the workspace admin must
  * be DERIVED FROM THE SIGNUP, not a shared platform account.
@@ -31,7 +31,7 @@ final readonly class EnsureWorkspaceOwner
         $owner = $this->resolveTenantOwner->execute($email, $name);
 
         // Ownership is `workspaces.user_id` (Workspace::owner()). Moving it off
-        // the shared service user is the whole point — a workspace still owned by
+        // the shared service user is the whole point. A workspace still owned by
         // the service user cannot be brokered into without every tenant sharing
         // one session.
         if ($workspace->user_id !== $owner->getKey()) {

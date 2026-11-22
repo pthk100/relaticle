@@ -13,11 +13,11 @@ use RuntimeException;
 /**
  * Creates a workspace for the platform and returns a Sanctum token pinned to it.
  *
- * Fork addition — see NOTICE. It reuses upstream's own App\Actions\Jetstream\CreateWorkspace,
+ * Fork addition; see NOTICE. It reuses upstream's own App\Actions\Jetstream\CreateWorkspace,
  * which is the same action the Filament registration page resolves, so workspace creation
  * keeps exactly one code path: validation, `Plan::default()`, the first-workspace flag and
  * the Pro-trial side effect all stay upstream's business. This class only adds the two
- * things an unattended caller needs — choosing the owning identity, and handing back a
+ * things an unattended caller needs: choosing the owning identity, and handing back a
  * credential.
  *
  * It runs outside the workspace-scoped API group in routes/api.php, because a token has to
@@ -44,7 +44,7 @@ final readonly class ProvisionWorkspace
         // The workspace's owner is the TENANT'S OWN identity when the caller names
         // one (the orchestrator derives `admin@<slug>.<base domain>` from the
         // signup). Only a caller that names no owner falls back to the shared
-        // platform service user — which is what the very first cut did for every
+        // platform service user, which is what the very first cut did for every
         // tenant, leaving each workspace with no identity of its own to broker a
         // session as (t_5df176cd).
         $user = $ownerEmail !== null && $ownerEmail !== ''
@@ -61,7 +61,7 @@ final readonly class ProvisionWorkspace
         // Upstream's panel drops a brand-new workspace into its own first-run
         // onboarding wizard (App\Filament\Pages\SetupWorkspace) while
         // `onboarding_step` is non-null. A PLATFORM-provisioned tenant has
-        // already told us who it is — name, domain, plan — at signup, so making
+        // already told us who it is (name, domain, plan) at signup, so making
         // the brand re-enter that in the CRM is the same "register again" friction
         // the console broker exists to remove (t_5df176cd). `null` is upstream's
         // own "onboarding complete" marker.

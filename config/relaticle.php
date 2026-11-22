@@ -24,7 +24,7 @@ return [
 
     /*
     |--------------------------------------------------------------------------
-    | Platform provisioning  (fork addition — see NOTICE)
+    | Platform provisioning  (fork addition, see NOTICE)
     |--------------------------------------------------------------------------
     |
     | The shared secret the calling platform presents as `X-Platform-Key` on

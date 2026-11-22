@@ -28,12 +28,12 @@ use Illuminate\Support\Facades\Route;
 
 /*
 |--------------------------------------------------------------------------
-| Platform provisioning  (fork addition — see NOTICE)
+| Platform provisioning  (fork addition, see NOTICE)
 |--------------------------------------------------------------------------
 |
 | Deliberately OUTSIDE the workspace-scoped group below. Those routes require a
 | Sanctum token pinned to a workspace (SetApiWorkspaceContext), and the entire point
-| of this route is to create the workspace that such a token is pinned to — so no
+| of this route is to create the workspace that such a token is pinned to, so no
 | token can exist yet. It authenticates the calling platform with a shared secret
 | instead of authenticating a tenant user.
 |
@@ -46,7 +46,7 @@ Route::prefix('v1')
         Route::post('workspaces', WorkspaceProvisionController::class)->name('platform.workspaces.store');
         // The console's session broker: mint a one-time login for a workspace's
         // tenant owner, so a brand that signed up once never meets the CRM's own
-        // login (t_5df176cd). Same shared-secret guard, for the same reason — no
+        // login (t_5df176cd). Same shared-secret guard, for the same reason: no
         // workspace-pinned token can exist for a session being established.
         Route::post('workspaces/{slug}/session', WorkspaceSessionController::class)->name('platform.workspaces.session');
         // Credential REISSUE for a workspace that already exists (t_659436f5). The
@@ -62,7 +62,7 @@ Route::prefix('v1')
         // workspace and the person, and only the five codes are writable through it.
         Route::post('platform/consent-mirror', ConsentMirrorController::class)
             ->name('platform.consent-mirror.store');
-        // Teardown counterpart — the orchestrator's cancel path deletes the tenant
+        // Teardown counterpart: the orchestrator's cancel path deletes the tenant
         // by slug over the same platform-guarded group (a workspace-pinned token
         // cannot exist for a workspace being removed).
         Route::delete('workspaces/{slug}', WorkspaceDeprovisionController::class)->name('platform.workspaces.destroy');

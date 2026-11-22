@@ -12,7 +12,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 
 /**
- * `GET /auth/logout` — the platform's server-side sign-out for this CRM session.
+ * `GET /auth/logout` is the platform's server-side sign-out for this CRM session.
  *
  * Fork addition (see NOTICE; card t_fc36fa36). The console's sign-out reaches
  * this route from the ORCHESTRATOR, not from the browser: console and CRM are one
@@ -22,7 +22,7 @@ use Illuminate\Support\Facades\Auth;
  *
  * WHY A NEW ROUTE when Filament already revokes: its `POST /app/logout` is a
  * CSRF-guarded form post, and a sign-out that has already navigated away cannot
- * render a form and post a token. This route is a GET for exactly that reason —
+ * render a form and post a token. This route is a GET for exactly that reason:
  * Logout-CSRF is an accepted trade, and it can revoke nothing but the session
  * that presents itself. It performs the SAME three calls Filament's controller
  * makes, so the `sessions` row is deleted rather than merely un-flagged:
@@ -54,7 +54,7 @@ final readonly class LogoutController
         $endSessionUrl = KeycloakEndSession::urlFor($retained);
 
         if ($request->boolean('continue')) {
-            // Realm sign-out if one was recorded, else the console's own door —
+            // Realm sign-out if one was recorded, else the console's own door:
             // never this deployment's login page (contract §8 item 3).
             return redirect()->away($endSessionUrl ?? PlatformConsole::url() ?? url('/'));
         }

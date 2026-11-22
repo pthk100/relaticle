@@ -9,7 +9,7 @@ use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
 
 /**
- * Platform-level authentication for the provisioning surface (fork addition — see NOTICE).
+ * Platform-level authentication for the provisioning surface (fork addition, see NOTICE).
  *
  * Deliberately NOT `auth:sanctum`. The whole purpose of the route this guards is to create
  * the workspace that a Sanctum token must be pinned to, so no token can exist yet. It

@@ -10,17 +10,17 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 /**
- * THE PLATFORM'S CONSENT MIRROR ENDPOINT (fork addition — see NOTICE).
+ * THE PLATFORM'S CONSENT MIRROR ENDPOINT (fork addition, see NOTICE).
  *
  * `POST /api/v1/platform/consent-mirror`, registered OUTSIDE the workspace-scoped
- * group and guarded by `EnsurePlatformKey` — the same `X-Platform-Key` seam the
+ * group and guarded by `EnsurePlatformKey`, which is the same `X-Platform-Key` seam the
  * workspace-provisioning routes use. Its caller is the orchestrator's mirror
  * drain, never a tenant user and never a browser.
  *
  * Why a platform route and not the ordinary People PATCH: the five mirror fields
  * are read-only for every tenant-authenticated caller by design
  * (`ConsentMirrorGuard`). If the platform wrote through the workspace token it
- * would be refused — correctly, since that token is what a human's session and a
+ * would be refused, since that token is what a human's session and a
  * tenant's own integrations both use.
  *
  * `workspace` and `person` are both named because the platform key is NOT

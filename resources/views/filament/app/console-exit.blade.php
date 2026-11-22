@@ -1,8 +1,8 @@
 {{--
-    The CRM's `← Console` exit (fork addition — see NOTICE; card t_619a7e0f).
+    The CRM's `← Console` exit (fork addition, see NOTICE; card t_619a7e0f).
 
     Rendered into USER_MENU_BEFORE, so it rides in the topbar's trailing cluster
-    on every authenticated page of the app panel — the same persistent position
+    on every authenticated page of the app panel. That is the same persistent position
     the two module SPAs put theirs in, and not a menu entry somebody has to open
     to find.
 
@@ -10,7 +10,7 @@
     panel is in SPA mode, but `wire:navigate` is an attribute ON an element, so
     leaving it off is what keeps this a real navigation to a different app.
 
-    `href` and `title` are built by App\Support\Platform\ConsoleExit — the ONE
+    `href` and `title` are built by App\Support\Platform\ConsoleExit. That is the ONE
     place in this codebase that constructs `/console/?realm=<slug>&returnTo=<…>`.
     Nothing is assembled here.
 --}}

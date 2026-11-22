@@ -19,7 +19,7 @@ use Illuminate\Validation\ValidationException;
  * The five mirror fields are read-only for every tenant-authenticated caller
  * (`ConsentMirrorGuard`), so the platform's projection needs its own door: this
  * action, reached only from `POST /api/v1/platform/consent-mirror`, which
- * `EnsurePlatformKey` guards with the `X-Platform-Key` shared secret — the same
+ * `EnsurePlatformKey` guards with the `X-Platform-Key` shared secret, the same
  * seam that creates workspaces (`relaticle-provisioning-seam.md`).
  *
  * ── Why it is all-or-nothing ────────────────────────────────────────────────
@@ -65,7 +65,7 @@ final readonly class WriteConsentMirror
 
         // Binds BOTH contexts the write needs: the CRM models' WorkspaceScope and
         // the custom-fields TenantScope. Neither is set on a platform-key request,
-        // and without them `customFields()` resolves to nothing — a write that
+        // and without them `customFields()` resolves to nothing. A write that
         // silently does nothing is the failure mode this seam must not have.
         return $this->currentWorkspace->within($workspace, function () use ($workspaceId, $personId, $values): array {
             $person = People::query()
@@ -138,7 +138,7 @@ final readonly class WriteConsentMirror
 
     /**
      * A select value must be one of the options the workspace holds; a toggle must
-     * be a boolean. `null` is allowed for every code — it means "the platform has
+     * be a boolean. `null` is allowed for every code: it means "the platform has
      * no value", and the field is emptied rather than left stale.
      */
     private function assertOffered(CustomField $field, string $workspaceId, mixed $value): void

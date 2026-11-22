@@ -21,7 +21,7 @@ use Illuminate\Support\Facades\Log;
  * value the select does not hold.
  *
  * Idempotent: `PlatformContactFieldSet` inserts only the options a field is
- * missing, and never deletes or renames one — a tenant's own curation of the
+ * missing, and never deletes or renames one. A tenant's own curation of the
  * fields it is allowed to curate survives, and a second run inserts zero rows.
  *
  * Safe on an empty database (no workspaces, no rows).

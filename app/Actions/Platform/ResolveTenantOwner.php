@@ -11,12 +11,12 @@ use Illuminate\Support\Str;
 /**
  * Resolves the TENANT-SCOPED identity that owns a platform-provisioned workspace.
  *
- * Fork addition — see NOTICE.
+ * Fork addition; see NOTICE.
  *
  * The orchestrator derives the address from the tenant's workspace domain
  * (`admin@<slug>.<base domain>`), never from the human's signup email: Relaticle's
  * `users.email` is globally unique, so reusing a signup address would make the
- * second tenant owned by the same human fail its insert — the same rule the
+ * second tenant owned by the same human fail its insert. It is the same rule the
  * ChatterMate provisioner already follows (`t_9f16c775`).
  *
  * Find-or-create, never create-on-the-fly-with-a-guess: a caller that can name an

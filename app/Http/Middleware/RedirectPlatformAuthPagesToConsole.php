@@ -14,7 +14,7 @@ use Symfony\Component\HttpFoundation\Response;
  *
  * Fork addition (see NOTICE; card t_fc36fa36).
  * `docs/specs/module-session-lifecycle.contract.md` §8 item 3: a tenant must
- * never be served Relaticle's email+password form — the console is the only door,
+ * never be served Relaticle's email+password form. The console is the only door,
  * and it hands the person back with `/console/?realm=<slug>&returnTo=<module>`.
  *
  * WHY MIDDLEWARE AND NOT `mount()` ON THE PAGES: the acceptance is a **302**. A
@@ -27,7 +27,7 @@ use Symfony\Component\HttpFoundation\Response;
  *
  * MATCHED BY ROUTE NAME SUFFIX, not by panel id: a stock fork install that names
  * its panel differently still gets the closure, and the redirect applies to the
- * auth pages alone — never to the break-glass broker (`/auth/broker/{token}`),
+ * auth pages alone, never to the break-glass broker (`/auth/broker/{token}`),
  * the provisioning API, or a signed-in tenant's `password.confirm` flows.
  */
 final readonly class RedirectPlatformAuthPagesToConsole
@@ -49,7 +49,7 @@ final readonly class RedirectPlatformAuthPagesToConsole
 
         if ($this->isAuthPage($request)) {
             // away(): the console lives at the ORIGIN's /console/, not under the
-            // CRM's /crm prefix — `to()` would prepend the app base path.
+            // CRM's /crm prefix, and `to()` would prepend the app base path.
             return redirect()->away($console);
         }
 

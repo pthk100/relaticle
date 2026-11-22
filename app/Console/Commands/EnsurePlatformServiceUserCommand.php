@@ -12,11 +12,11 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
 
 /**
- * Seeds the identity that owns platform-provisioned workspaces (fork addition — see NOTICE).
+ * Seeds the identity that owns platform-provisioned workspaces (fork addition, see NOTICE).
  *
  * Required rather than optional: a fresh install has zero users, and ProvisionWorkspace
  * deliberately refuses to invent one, so POST /api/v1/workspaces cannot succeed until this
- * has run. Idempotent — running it twice updates rather than duplicating.
+ * has run. Idempotent: running it twice updates rather than duplicating.
  */
 #[Description('Create the platform service user that owns workspaces created via the provisioning API')]
 #[Signature('platform:service-user

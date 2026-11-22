@@ -13,17 +13,17 @@ use Illuminate\Contracts\View\View;
 use Illuminate\Support\ServiceProvider;
 
 /**
- * Puts the `← Console` exit in the app panel's chrome (fork addition — see
+ * Puts the `← Console` exit in the app panel's chrome (fork addition, see
  * NOTICE; card t_619a7e0f).
  *
  * WHY A SEPARATE PROVIDER, and not `AppPanelProvider::panel()`. A render hook is
- * panel configuration, so it belongs there — but that method is on the fork's
+ * panel configuration, so it belongs there, but that method is on the fork's
  * shrink-only length budget (`phpstan-method-length.php`), and this control is
  * not worth spending it on. Registering the hook from its own provider keeps the
  * panel provider's diff at zero and leaves the existing hooks untouched.
  *
  * The hook is registered GLOBALLY because that is the only registration
- * Filament offers, so the closure narrows to the `app` panel itself — the
+ * Filament offers, so the closure narrows to the `app` panel itself. The
  * sysadmin panel has no console to return to. `USER_MENU_BEFORE` renders inside
  * the topbar's trailing cluster, which every authenticated panel page shares, so
  * the control is present on all of them rather than only the dashboard.

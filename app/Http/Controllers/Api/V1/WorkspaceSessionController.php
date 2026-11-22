@@ -12,12 +12,12 @@ use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Str;
 
 /**
- * Platform-level workspace session broker (fork addition — see NOTICE).
+ * Platform-level workspace session broker (fork addition, see NOTICE).
  *
  * The console mints a MODULE session from the console login, so a brand that
  * signed up once never sees the CRM's own login. Relaticle's panel is
  * session-based (Filament), and no Sanctum bearer can stand in for a browser
- * session — so the hand-off is a ONE-TIME, short-lived token the browser
+ * session, so the hand-off is a ONE-TIME, short-lived token the browser
  * redeems at /auth/broker/{token} (BrokerLoginController).
  *
  * Registered in routes/api.php inside the platform group, guarded by
@@ -25,7 +25,7 @@ use Illuminate\Support\Str;
  * workspace-pinned Sanctum token cannot exist for a session being established.
  *
  * The token is single-use (`Cache::pull` on redemption) and expires in two
- * minutes, so an intercepted URL is worthless once followed — or shortly after,
+ * minutes, so an intercepted URL is worthless once followed, or shortly after,
  * if it is never followed.
  */
 final readonly class WorkspaceSessionController
@@ -38,7 +38,7 @@ final readonly class WorkspaceSessionController
     public function __invoke(Request $request, string $slug): JsonResponse
     {
         $validated = $request->validate([
-            // The tenant's own identity, derived from the signup — never the
+            // The tenant's own identity, derived from the signup, never the
             // human's signup email (globally unique; t_9f16c775).
             'owner_email' => ['required', 'email', 'max:255'],
             'owner_name' => ['nullable', 'string', 'max:255'],

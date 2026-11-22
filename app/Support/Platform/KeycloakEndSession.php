@@ -13,7 +13,7 @@ namespace App\Support\Platform;
  * `end_session_endpoint` with the `id_token` Keycloak issued at callback.
  *
  * WHY THE FORK AND NOT THE CONSOLE: only the party that held the `id_token` can
- * build a URL Keycloak accepts without prompting — without `id_token_hint`
+ * build a URL Keycloak accepts without prompting. Without `id_token_hint`
  * Keycloak cannot tell which session to end and answers a confirmation page
  * (`orchestrator/src/routes/console-auth.ts:694-702` documents the neighbouring
  * failure, an unregistered `post_logout_redirect_uri`).
@@ -33,7 +33,7 @@ final readonly class KeycloakEndSession
     /**
      * The scheme://host the browser reaches this deployment on.
      *
-     * Derived from `APP_URL`, whose path is `/crm` on this deployment — the realm
+     * Derived from `APP_URL`, whose path is `/crm` on this deployment. The realm
      * endpoints live at the ORIGIN (`/realms/…`), not under the `/crm` prefix.
      */
     public static function origin(): string

@@ -355,7 +355,7 @@ final class AppPanelProvider extends PanelProvider
      * The panel's own redirect routes.
      *
      * Extracted from panel(), which is on the shrink-only method-length list
-     * (phpstan-method-length.php) — t_fc36fa36 needs one more middleware in that
+     * (phpstan-method-length.php). Card t_fc36fa36 needs one more middleware in that
      * method, so the routes moved out rather than growing it.
      */
     private function panelRedirectRoutes(Panel $panel): void
@@ -471,7 +471,7 @@ final class AppPanelProvider extends PanelProvider
                 SubstituteBindings::class,
                 // t_fc36fa36: the panel's own login / password-reset pages 302 to
                 // the platform console when this deployment declares one. Runs
-                // here — before the page component — because Livewire's mount()
+                // here, ahead of the page component, because Livewire's mount()
                 // redirect is a 200+effect, never the 302 the contract requires.
                 RedirectPlatformAuthPagesToConsole::class,
                 DisableBladeIconComponents::class,

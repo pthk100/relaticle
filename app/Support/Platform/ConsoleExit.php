@@ -8,20 +8,20 @@ use Illuminate\Contracts\Auth\Authenticatable;
 use Illuminate\Http\Request;
 
 /**
- * The CRM's `← Console` exit (fork addition — see NOTICE; card t_619a7e0f).
+ * The CRM's `← Console` exit (fork addition, see NOTICE; card t_619a7e0f).
  *
  * `design/CONTRACT.md` §11 requirement 7: every module has *"a way back to the
  * console; no trapping, and no module-owned logout that strands the user"*. The
  * two module SPAs that honour it each own ONE builder
  * (`chattermate/frontend/src/composables/useConsoleJump.ts`,
  * `automation/src/ConsoleJump.tsx`); this is the CRM's, and it produces the SAME
- * URL shape — `/console/?realm=<slug>&returnTo=<url-encoded path>`. One shape
+ * URL shape: `/console/?realm=<slug>&returnTo=<url-encoded path>`. One shape
  * across three codebases, not three shapes.
  *
  * WHY THE BUILDER LIVES SERVER-SIDE. Relaticle is ONE deployment serving every
  * tenant (see {@see TenantSurface}), so the realm is not a per-deployment
  * constant and must never be a value the browser can type in: it is read from
- * the two server-side records that name it —
+ * the two server-side records that name it:
  *
  *   1. the session entry the federation callback wrote
  *      (`KeycloakFederationController` → `KeycloakEndSession::SESSION_KEY`);
@@ -37,7 +37,7 @@ use Illuminate\Http\Request;
  * WHAT `returnTo` CARRIES. The path the person is actually on, prefix included
  * (`/crm/app/leads?...`). nginx hands PHP the UNREWRITTEN `REQUEST_URI`
  * (`docker/relaticle/nginx-crm-prefix.conf`), so `getRequestUri()` is the
- * browser's own path — the same "where this module is" the other two builders
+ * browser's own path, which is the same "where this module is" the other two builders
  * send. A pathInfo-relative value would drop `/crm` and land the person on a
  * URL the edge does not serve after they sign in.
  *
@@ -97,7 +97,7 @@ final readonly class ConsoleExit
     }
 
     /**
-     * This session's federated realm, from the server-side record that names it —
+     * This session's federated realm comes from the server-side record that names it,
      * never from the request.
      */
     public static function realm(Request $request, ?Authenticatable $user = null): ?string
@@ -119,7 +119,7 @@ final readonly class ConsoleExit
      * prefix included.
      *
      * A URI that is not root-absolute is not this module's location, and a link
-     * built from one would leave the console for somewhere else — so it degrades
+     * built from one would leave the console for somewhere else, so it degrades
      * to the console's own root instead of emitting an unservable `returnTo`.
      */
     public static function returnTo(Request $request): string
@@ -131,7 +131,7 @@ final readonly class ConsoleExit
 
     /**
      * The control's accessible name, branded with the tenant's own name where the
-     * session is a tenant's — the same wording the other two builders use.
+     * session is a tenant's, in the same wording the other two builders use.
      */
     public static function title(): string
     {

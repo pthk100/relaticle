@@ -19,7 +19,7 @@ use Laravel\Socialite\Contracts\User as SocialiteUser;
 use Laravel\Socialite\Two\InvalidStateException;
 
 /**
- * Federated CRM sign-in — Relaticle to the tenant's own Keycloak realm.
+ * Federated CRM sign-in, from Relaticle to the tenant's own Keycloak realm.
  *
  * Fork addition (see NOTICE). This is the CRM half of the platform's
  * "one signup only" decision (t_08c88bb4): a brand that signed into the console
@@ -30,13 +30,13 @@ use Laravel\Socialite\Two\InvalidStateException;
  * session for the browser here. The browser is handed to Relaticle's Socialite
  * seam, which performs a real OIDC Authorization Code + PKCE round trip against
  * the tenant's realm; Keycloak issues the code and Relaticle exchanges it. The
- * identity that arrives is the realm user — there is no stored password and no
+ * identity that arrives is the realm user. There is no stored password and no
  * shared login.
  *
  * WHICH WORKSPACE. The tenant is named on the START request
  * (`GET /auth/keycloak/{workspace}`), where `{workspace}` route-binds to the
  * workspace whose slug IS the realm suffix. The slug is kept in the session and
- * read back on the CALLBACK — the OIDC `state`/`code` never carry it, so a
+ * read back on the CALLBACK, because the OIDC `state`/`code` never carry it, so a
  * forged callback cannot steer the login to another tenant's workspace.
  *
  * The workspace is the "claim that identifies the workspace": the realm
@@ -48,7 +48,7 @@ use Laravel\Socialite\Two\InvalidStateException;
  *
  * IDENTITY. The realm subject (`sub`) is the identity key, scoped by realm:
  * `provider_id` is `"<realm>|<sub>"`. That keeps two tenants apart even when one
- * human administers both — `users.email` is globally unique, so the email is
+ * human administers both: `users.email` is globally unique, so the email is
  * used only when it is free, and a tenant-scoped synthetic address otherwise
  * (the rule t_9f16c775 established for exactly this collision).
  *
@@ -64,7 +64,7 @@ final readonly class KeycloakFederationController
     public const PROVIDER = 'keycloak';
 
     /**
-     * `GET /auth/keycloak/{workspace}` — begin the tenant's OIDC round trip.
+     * `GET /auth/keycloak/{workspace}` begins the tenant's OIDC round trip.
      */
     public function start(Request $request, Workspace $workspace): RedirectResponse
     {
@@ -74,7 +74,7 @@ final readonly class KeycloakFederationController
     }
 
     /**
-     * `GET /auth/keycloak/callback` — redeem the code, land in the workspace.
+     * `GET /auth/keycloak/callback` redeems the code and lands in the workspace.
      */
     public function callback(Request $request): RedirectResponse
     {
@@ -187,7 +187,7 @@ final readonly class KeycloakFederationController
      *
      * The realm is `tenant-<slug>`. `config('services.keycloak')` carries only
      * deployment-wide values (the internal base URL, the public client id and
-     * the public origin); nothing per-tenant is stored here — the tenant is the
+     * the public origin). Nothing per-tenant is stored here: the tenant is the
      * `{workspace}` route parameter.
      */
     private function provider(Request $request, string $slug): KeycloakProvider
@@ -195,7 +195,7 @@ final readonly class KeycloakFederationController
         $internal = (string) config('services.keycloak.internal_base_url', 'http://keycloak:8080');
 
         // `config('services.keycloak.public_origin')` is null when the env var is
-        // unset, and a null key DEFEATS config()'s default argument — so the
+        // unset, and a null key DEFEATS config()'s default argument, so the
         // fallback has to be explicit here, or the authorize URL is emitted
         // relative and Laravel absolutises it against the internal dial host.
         $configured = config('services.keycloak.public_origin');
@@ -204,7 +204,7 @@ final readonly class KeycloakFederationController
         $provider = new KeycloakProvider(
             $request,
             (string) config('services.keycloak.client_id', 'relaticle-crm'),
-            '', // public client — no secret (PKCE carries the proof)
+            '', // public client: PKCE carries the proof
             url('/auth/keycloak/callback'),
         );
 
@@ -216,7 +216,7 @@ final readonly class KeycloakFederationController
      * spec §2 D3): the id_token Keycloak just issued and the realm it belongs to.
      *
      * Written AFTER `regenerate()` (which rotates the id but keeps the data) and
-     * only if the provider still holds a token response — a build without one
+     * only if the provider still holds a token response. A build without one
      * leaves `end_session_url` null, which the sign-out reports rather than hides.
      */
     private function rememberSignOut(Request $request, string $realm, KeycloakProvider $provider): void
@@ -230,7 +230,7 @@ final readonly class KeycloakFederationController
     /**
      * The scheme://host the browser reaches this deployment on.
      *
-     * Derived from `APP_URL`, whose path is `/crm` on this deployment — the realm
+     * Derived from `APP_URL`, whose path is `/crm` on this deployment. The realm
      * endpoints live at the ORIGIN (`/realms/…`), not under the `/crm` prefix.
      * Shared with the sign-out leg so both halves build the same origin
      * ({@see KeycloakEndSession::origin()}).

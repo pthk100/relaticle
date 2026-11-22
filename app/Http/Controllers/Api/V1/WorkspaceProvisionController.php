@@ -10,7 +10,7 @@ use Illuminate\Http\Request;
 use RuntimeException;
 
 /**
- * Platform-level workspace provisioning (fork addition — see NOTICE).
+ * Platform-level workspace provisioning (fork addition, see NOTICE).
  *
  * Registered in routes/api.php OUTSIDE the workspace-scoped group, so it is guarded by
  * EnsurePlatformKey rather than `auth:sanctum` + SetApiWorkspaceContext. Its caller is the
@@ -32,7 +32,7 @@ final readonly class WorkspaceProvisionController
             'slug' => ['nullable', 'string', 'max:255'],
             'token_name' => ['nullable', 'string', 'max:255'],
             // The TENANT-SCOPED owner identity. The orchestrator derives it from
-            // the workspace domain (`admin@<slug>.<base domain>`) — never the
+            // the workspace domain (`admin@<slug>.<base domain>`), never the
             // human's signup email, which is globally unique and would collide on
             // the second tenant the same human signs up for (t_9f16c775).
             'owner_email' => ['nullable', 'email', 'max:255'],

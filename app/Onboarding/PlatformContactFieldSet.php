@@ -183,7 +183,7 @@ final readonly class PlatformContactFieldSet
     /**
      * Top up the OPTIONS of an already-seeded select (t_a8dd1bae).
      *
-     * A code list can change after a workspace has been seeded — the withdrawal
+     * A code list can change after a workspace has been seeded. The withdrawal
      * reasons gained six reason codes that a tenant who signed up yesterday does
      * not have, and without this the platform's write would be refused by the CRM
      * for a value the select does not offer. Missing options are INSERTED; nothing

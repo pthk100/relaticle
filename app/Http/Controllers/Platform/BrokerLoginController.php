@@ -14,14 +14,14 @@ use Illuminate\Support\Facades\Cache;
 /**
  * Redeems a brokered sign-in token and lands the browser inside the panel.
  *
- * Fork addition — see NOTICE.
+ * Fork addition; see NOTICE.
  *
  * The token is minted by WorkspaceSessionController (platform-key guarded) and
  * carries only our own ids. It is pulled from the cache, so redeeming it twice
  * fails the second time: a leaked URL is a one-shot, and it expires in two
  * minutes whether or not it is used.
  *
- * Deliberately NOT under the `guest` or `auth` middleware groups — the token IS
+ * Deliberately NOT under the `guest` or `auth` middleware groups: the token IS
  * the credential, and a user who is already signed in (a stale session from
  * another tenant) must still be switched to the workspace the console named.
  */

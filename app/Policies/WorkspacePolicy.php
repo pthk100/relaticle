@@ -32,12 +32,12 @@ final readonly class WorkspacePolicy
     /**
      * Determine whether the user can create models.
      *
-     * The platform service user — the single identity that owns every workspace
+     * The platform service user is the single identity that owns every workspace
      * created through POST /api/v1/workspaces (see
-     * App\Actions\Platform\ProvisionWorkspace) — is EXEMPT from the per-user cap.
+     * App\Actions\Platform\ProvisionWorkspace). It is EXEMPT from the per-user cap.
      * That cap is an anti-abuse limit for human owners; this one non-human
      * identity owns a workspace per tenant, so applying it here would silently
-     * cap the whole platform at max_owned_per_user tenants. Fork addition — see
+     * cap the whole platform at max_owned_per_user tenants. Fork addition, see
      * NOTICE.
      */
     public function create(User $user): bool

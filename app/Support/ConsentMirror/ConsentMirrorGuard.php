@@ -19,8 +19,8 @@ use Illuminate\Validation\ValidationException;
  * a PROJECTION of the platform's own consent store. The send gate
  * (`orchestrator/src/consent/eligible.ts`) reads that store and never this CRM, so
  * the copy is a warning surface: it must never say `granted` for somebody who
- * withdrew. `system_defined` is only a flag on the row — it makes the field
- * undeletable and nothing else — so the invariant needs a real guard, and this is
+ * withdrew. `system_defined` is only a flag on the row, and it makes the field
+ * undeletable and nothing else. The invariant needs a real guard, and this is
  * the smallest one that holds: the value write itself is refused, so it does not
  * matter whether the caller is the web form, the REST API, the MCP tools or an
  * import.
@@ -96,7 +96,7 @@ final class ConsentMirrorGuard
             return;
         }
 
-        // Absent from the payload — `saveCustomFields()` nulls what it cannot find.
+        // Absent from the payload: `saveCustomFields()` nulls what it cannot find.
         if ($incoming === null) {
             return;
         }
@@ -105,8 +105,8 @@ final class ConsentMirrorGuard
             return;
         }
 
-        // A select's value has two spellings — the option ID the API normalises to
-        // and the label the field shows — so raw equality is not enough: re-saving
+        // A select's value has two spellings. The option ID the API normalises to
+        // and the label the field shows both count, so raw equality is not enough:
         // the SAME option must not read as a change.
         if (self::sameOptionValue($field, $incoming, $current)) {
             return;

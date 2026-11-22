@@ -11,7 +11,7 @@ namespace App\Support\Platform;
  * serves its own tenant login: the platform console is the only door, and it
  * hands a signed-in person back with `/console/?realm=<slug>&returnTo=<module>`.
  * A tenant that met Relaticle's email+password form instead would be a second,
- * unmanaged identity surface — `docs/specs/module-session-lifecycle.contract.md`
+ * unmanaged identity surface. `docs/specs/module-session-lifecycle.contract.md`
  * §8 item 3 forbids it for this deployment.
  *
  * ENV-GATED ON PURPOSE (`PLATFORM_CONSOLE_URL`). Upstream's self-host story is

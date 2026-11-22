@@ -83,7 +83,7 @@ return [
 
     /*
     | The tenant's own Keycloak realm is the CRM's identity provider (fork
-    | addition — see NOTICE; App\Socialite\KeycloakProvider). Only DEPLOYMENT-WIDE
+    | addition, see NOTICE; App\Socialite\KeycloakProvider). Only DEPLOYMENT-WIDE
     | values live here; the realm is per-tenant and is named on the request
     | (`/auth/keycloak/{workspace}`), never in config. `public_origin` falls back
     | to `app.url`'s origin when unset.

@@ -59,7 +59,7 @@ use Spatie\MarkdownResponse\Middleware\ProvideMarkdownResponse;
 |
 */
 
-// ── Brokered module sign-in (fork addition — see NOTICE) ─────────────────────
+// ── Brokered module sign-in (fork addition, see NOTICE) ──────────────────────
 // The console mints a one-time token (WorkspaceSessionController, platform-key
 // guarded) and sends the browser here. NOT under `guest` or `auth`: the token IS
 // the credential, and a stale session from another tenant must still be switched
@@ -68,12 +68,12 @@ Route::get('/auth/broker/{token}', BrokerLoginController::class)
     ->name('platform.broker-login')
     ->middleware('throttle:30,1');
 
-// ── Federated CRM sign-in (fork addition — see NOTICE) ───────────────────────
+// ── Federated CRM sign-in (fork addition, see NOTICE) ────────────────────────
 // Relaticle federates to the tenant's OWN Keycloak realm `tenant-<slug>` through
 // the Socialite seam: a real OIDC Authorization Code + PKCE round trip, not a
 // brokered stored credential (t_08c88bb4). `{workspace}` route-binds to the
 // workspace whose slug is the realm suffix, and the slug is carried in the
-// session — never in the OIDC parameters — so a forged callback cannot steer the
+// session, never in the OIDC parameters, so a forged callback cannot steer the
 // login to another tenant. Deliberately NOT under `guest`/`auth`: a stale
 // session from another tenant must still be switched to the workspace named.
 // The callback is declared FIRST so the literal `callback` segment is not
@@ -82,23 +82,23 @@ Route::get('/auth/keycloak/callback', [KeycloakFederationController::class, 'cal
     ->name('platform.keycloak.callback')
     ->middleware('throttle:30,1');
 // `{workspace:slug}` binds on the SLUG, not the model's default route key
-// (`id`) — the slug IS the realm suffix, so "bind by id" would 404 every
+// (`id`). The slug IS the realm suffix, so "bind by id" would 404 every
 // hand-off. The slug shape is Laravel's own workspace-slug rule.
 Route::get('/auth/keycloak/{workspace:slug}', [KeycloakFederationController::class, 'start'])
     ->where('workspace', '[a-z0-9]+(?:-[a-z0-9]+)*')
     ->name('platform.keycloak.start')
     ->middleware('throttle:30,1');
 
-// ── Platform sign-out (fork addition — see NOTICE) ───────────────────────────
+// ── Platform sign-out (fork addition, see NOTICE) ────────────────────────────
 // The console's sign-out forwards the browser's OWN session cookie here on one
 // bounded internal call, so the `sessions` row is destroyed rather than merely
 // un-cookied (contract §3.3, card t_fc36fa36). GET, so the call needs no CSRF
 // token; deliberately NOT under `guest`/`auth`, because an already-dead session
-// must be a 200 no-op — the caller cannot follow a redirect.
+// must be a 200 no-op, because the caller cannot follow a redirect.
 Route::get('/auth/logout', LogoutController::class)
     ->name('platform.logout');
 
-// ── The login door (fork addition — see NOTICE) ──────────────────────────────
+// ── The login door (fork addition, see NOTICE) ───────────────────────────────
 // Contract §8 item 3: `/crm/login` must not serve a tenant. When the deployment
 // declares a platform console this answers `/console/`; unset (stock self-host)
 // it keeps upstream's redirect to the panel's own login. OUTSIDE the `guest`
@@ -106,7 +106,7 @@ Route::get('/auth/logout', LogoutController::class)
 // the dashboard, so the same URL would mean two different things.
 Route::get('/login', function (): RedirectResponse {
     // away(), not to(): `to()` runs the path through the URL generator, which
-    // prepends the app's /crm base — the console lives at the ORIGIN's /console/,
+    // prepends the app's /crm base. The console lives at the ORIGIN's /console/,
     // not under the CRM's prefix. A root-relative Location is what the browser
     // resolves against the origin, which is exactly the contract's target.
     return redirect()->away(PlatformConsole::url() ?? url()->getAppUrl('login'));

@@ -9,12 +9,12 @@ use Laravel\Socialite\Two\ProviderInterface;
 use Laravel\Socialite\Two\User;
 
 /**
- * Keycloak OIDC provider — the tenant's OWN realm is the identity provider.
+ * Keycloak OIDC provider: the tenant's OWN realm is the identity provider.
  *
  * Fork addition (see NOTICE). Upstream Relaticle ships Socialite with Google and
  * Microsoft only; neither can be pointed at a Keycloak realm. This is the one
  * provider the platform needs, so the CRM federates to the SAME identity that
- * signs the brand into the console — realm `tenant-<slug>`, not a shared login.
+ * signs the brand into the console. The realm is `tenant-<slug>`, not a shared login.
  *
  * Per-tenant, built per request
  * -----------------------------
@@ -22,7 +22,7 @@ use Laravel\Socialite\Two\User;
  * Relaticle serving every tenant, so a deployment-wide Keycloak client would be
  * one shared credential. Instead the caller builds the provider for a named
  * workspace (its slug is the realm), which is why the generic Filament login
- * page never offers this provider — it has no tenant to point at.
+ * page never offers this provider, because it has no tenant to point at.
  *
  * Public client + PKCE
  * --------------------
@@ -60,7 +60,7 @@ final class KeycloakProvider extends AbstractProvider implements ProviderInterfa
      *
      * Fork addition (see NOTICE; card t_fc36fa36). The parent reads the identity
      * out of the access token ({@see self::getUserByToken()}) and throws the
-     * response away — which also throws away `id_token`, the ONE credential an
+     * response away. That also throws away `id_token`, the ONE credential an
      * RP-initiated logout needs: without `id_token_hint` Keycloak cannot tell
      * which SSO session to end and answers a confirmation page instead of signing
      * out. Retained in memory only; the caller stores it with the session.
@@ -99,8 +99,8 @@ final class KeycloakProvider extends AbstractProvider implements ProviderInterfa
      * The identity claims, read from the ACCESS token itself.
      *
      * Keycloak's access token is a JWT whose `profile`/`email` client-scope
-     * mappers carry `sub`, `preferred_username`, `email` and `name` — the same
-     * claims the userinfo endpoint would return — so there is no reason to make
+     * mappers carry `sub`, `preferred_username`, `email` and `name`. Those are the same
+     * claims the userinfo endpoint would return, so there is no reason to make
      * a second network call. (The userinfo endpoint additionally answers 401 to
      * a token minted through the internal base URL, because the token's issuer
      * is the PUBLIC origin and Keycloak won't accept it through the internal
@@ -140,7 +140,7 @@ final class KeycloakProvider extends AbstractProvider implements ProviderInterfa
     }
 
     /**
-     * A public client must not send `client_secret` — Keycloak answers a
+     * A public client must not send `client_secret`: Keycloak answers a
      * public-client code exchange that carries one with `invalid_client`.
      *
      * @return array<string, mixed>
