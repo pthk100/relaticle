@@ -160,3 +160,36 @@ it('labels the acting user with the "(You)" suffix via getOptionLabelFromRecordU
         ->and($select->getOptionLabelFromRecord($owner))
         ->toContain($owner->getFilamentAvatarUrl());
 });
+
+it('never offers the platform\'s own identity as a person to assign or own', function (): void {
+    [$workspace, $owner] = workspaceMemberSelectWorkspace();
+
+    // Attached as a plain member: the API needs it to BELONG so its credential can act
+    // as the platform, which is exactly why it now appears in member queries.
+    $serviceUser = User::factory()->create([
+        'email' => config('relaticle.platform.service_user_email'),
+        'name' => 'The platform',
+    ]);
+    $workspace->users()->attach($serviceUser, ['role' => 'member']);
+
+    $this->actingAs($owner);
+
+    $names = User::query()
+        ->tap(WorkspaceMemberSelect::currentWorkspaceMembers())
+        ->pluck('name')
+        ->all();
+
+    // Work assigned to the automation is work nobody will do, and it reads as a person.
+    expect($names)->toBe(['Zoe Zimmer', 'Alice Anderson'])
+        ->and($names)->not->toContain('The platform');
+
+    $task = Task::factory()->create(['workspace_id' => $workspace->getKey()]);
+
+    // Filament derives the field's `in` validation rule from this same query, so
+    // the id must be unresolvable too, not merely unlisted.
+    $component = WorkspaceMemberSelect::make('assignees')
+        ->model($task)
+        ->relationship('assignees', 'name');
+
+    expect($component->getOptionsFromRelationship())->not->toHaveKey($serviceUser->getKey());
+});

@@ -23,7 +23,14 @@ final class UpdateTaskRequest extends BaseCrmEntityRequest
     {
         $workspace = $user->currentWorkspace;
         $workspaceId = $workspace->getKey();
-        $workspaceMemberIds = $workspace->users()->pluck('users.id')->push($workspace->user_id)->unique()->all();
+        // Everyone in the workspace EXCEPT the platform's own identity: it is a member so
+        // its credential can act here, but work assigned to the automation is work nobody
+        // does (t_ca323f91).
+        $workspaceMemberIds = User::query()
+            ->memberOf($workspace)
+            ->withoutPlatformServiceUser()
+            ->pluck('id')
+            ->all();
 
         return [
             'title' => ['sometimes', 'required', 'string', 'max:255'],

@@ -22,7 +22,15 @@ final class UpdateCompanyRequest extends BaseCrmEntityRequest
     {
         return [
             'name' => ['sometimes', 'required', 'string', 'max:255'],
-            'account_owner_id' => ['sometimes', 'nullable', 'string', Rule::in($user->currentWorkspace->allUsers()->pluck('id')->all())],
+            'account_owner_id' => ['sometimes', 'nullable', 'string', Rule::in(
+                User::query()
+                    ->memberOf($user->currentWorkspace)
+                    // The platform's identity is a member, not a person an account can be
+                    // handed to (t_ca323f91).
+                    ->withoutPlatformServiceUser()
+                    ->pluck('id')
+                    ->all(),
+            )],
         ];
     }
 }

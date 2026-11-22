@@ -108,3 +108,22 @@ it('refuses a token without read, the ability records.view grants', function ():
         ->getJson("/api/v1/workspaces/{$this->workspace->slug}/members")
         ->assertForbidden();
 });
+
+it('does not list the platform identity as a member a caller may name', function (): void {
+    $serviceUser = User::factory()->create([
+        'email' => config('relaticle.platform.service_user_email'),
+        'name' => 'The platform',
+    ]);
+    $this->workspace->users()->attach($serviceUser, ['role' => WorkspaceRole::Member->value]);
+
+    $response = $this->withToken($this->token)
+        ->getJson("/api/v1/workspaces/{$this->workspace->slug}/members")
+        ->assertOk();
+
+    // This directory exists so a caller can pick a task assignee or an account owner.
+    // The platform account is neither, and its id is not a thing a person should be
+    // handed to name.
+    expect(collect($response->json('data'))->pluck('email')->all())
+        ->toBe(['mint@example.com'])
+        ->not->toContain('platform@relaticle.invalid');
+});

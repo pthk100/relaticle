@@ -149,6 +149,8 @@ final class WorkspaceMembers extends BaseLivewireComponent implements Tables\Con
      */
     private function memberRows(): QueryBuilder
     {
+        $serviceEmail = (string) config('relaticle.platform.service_user_email');
+
         return DB::table('users')
             ->selectRaw(
                 <<<'SQL'
@@ -171,7 +173,14 @@ final class WorkspaceMembers extends BaseLivewireComponent implements Tables\Con
                         ->from('workspace_user')
                         ->whereColumn('workspace_user.user_id', 'users.id')
                         ->where('workspace_user.workspace_id', $this->workspace->id));
-            });
+            })
+            // The platform's own identity is a member (its credential has to belong),
+            // but it is not a colleague: the roster is where people manage people, and
+            // this row's role is nobody's to change (t_ca323f91).
+            ->when(
+                $serviceEmail !== '',
+                fn (QueryBuilder $query): QueryBuilder => $query->where('users.email', '<>', $serviceEmail),
+            );
     }
 
     // Sorted ahead of the members: an invitation is the row somebody still has

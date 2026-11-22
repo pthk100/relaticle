@@ -24,7 +24,10 @@ use App\Models\Workspace;
  */
 final readonly class EnsureWorkspaceOwner
 {
-    public function __construct(private ResolveTenantOwner $resolveTenantOwner) {}
+    public function __construct(
+        private ResolveTenantOwner $resolveTenantOwner,
+        private EnsurePlatformServiceMembership $ensurePlatformServiceMembership,
+    ) {}
 
     public function execute(Workspace $workspace, string $email, ?string $name = null): User
     {
@@ -53,6 +56,13 @@ final readonly class EnsureWorkspaceOwner
         if ($workspace->onboarding_step !== null) {
             $workspace->forceFill(['onboarding_step' => null])->save();
         }
+
+        // The platform must remain able to hold a credential for this workspace after
+        // its ownership moved: the credential the orchestrator stores acts as the
+        // platform identity (t_ca323f91), and SetApiWorkspaceContext requires it to
+        // belong here. Attached AFTER the move, because an adoption off the service
+        // user would otherwise find it still the owner and add no row.
+        $this->ensurePlatformServiceMembership->executeIfAvailable($workspace);
 
         return $owner;
     }

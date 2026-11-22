@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace App\Console\Commands;
 
+use App\Enums\WorkspaceRole;
 use App\Models\User;
+use App\Models\Workspace;
 use Illuminate\Console\Attributes\Description;
 use Illuminate\Console\Attributes\Signature;
 use Illuminate\Console\Command;
@@ -50,9 +52,30 @@ final class EnsurePlatformServiceUserCommand extends Command
 
         $user->save();
 
+        // Every workspace must be able to hold a credential for this identity: the
+        // orchestrator's stored credential acts as the platform, and
+        // SetApiWorkspaceContext requires its holder to belong (t_ca323f91). Attaching
+        // here is the sweep over workspaces that predate the change; provisioning and
+        // adoption attach at their own seams, and the token route attaches on demand.
+        $attached = 0;
+        $present = 0;
+
+        Workspace::query()->orderBy('id')->each(function (Workspace $workspace) use ($user, &$attached, &$present): void {
+            if ($workspace->user_id === $user->getKey() || $workspace->users()->whereKey($user->getKey())->exists()) {
+                $present++;
+
+                return;
+            }
+
+            $workspace->users()->attach($user->getKey(), ['role' => WorkspaceRole::Member->value]);
+            $attached++;
+        });
+
         $this->info($isNew
             ? "Created platform service user [{$email}]."
             : "Platform service user [{$email}] already existed; nothing else changed.");
+
+        $this->line("Workspace membership: {$attached} attached, {$present} already present.");
 
         $this->line('It owns provisioned workspaces and authenticates over API tokens; it is not intended to sign in to the panel.');
 

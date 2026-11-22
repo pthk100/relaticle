@@ -4,10 +4,11 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Api\V1;
 
+use App\Actions\Platform\EnsurePlatformServiceMembership;
 use App\Actions\Platform\IssueWorkspaceToken;
-use App\Models\User;
 use App\Models\Workspace;
 use Illuminate\Http\JsonResponse;
+use RuntimeException;
 
 /**
  * Platform-level credential REISSUE for a workspace that already exists
@@ -26,17 +27,25 @@ use Illuminate\Http\JsonResponse;
  * the workspace's earlier platform-minted tokens in the same call, so the caller
  * that stores the new one holds the only live credential for the workspace.
  *
- * The identity is NOT a caller input: the token is always minted for the
- * workspace's owner-of-record. That keeps the invariant the provisioning seam
- * already asserts: a tenant's credential acts as the tenant's own identity, never
- * as an arbitrary account the caller names. Guarded by EnsurePlatformKey (the same
- * shared secret as `POST /api/v1/workspaces`): a workspace-pinned Sanctum token
- * could exist here, but it is exactly the credential this route replaces, so
- * authenticating with it would be circular.
+ * The identity is NOT a caller input — and it is no longer the owner-of-record either
+ * (t_ca323f91). A token minted for the workspace's owner is true to that owner but false
+ * about the author: every row the platform writes through it carries `creator_id` = a
+ * person, so the CRM shows that person's name and a person chip, presenting a projection
+ * as a colleague's own edit. The token is minted for the shared service identity
+ * (`config('relaticle.platform.service_user_email')`), which is attached to the workspace
+ * as a `member` below; the identity-based `⊙ The platform` mark then applies unchanged.
+ * It is still never a caller input: no `user_id` or `owner_email` body field is accepted,
+ * so a tenant credential can never act as an arbitrary account the caller names. Guarded
+ * by EnsurePlatformKey (the same shared secret as `POST /api/v1/workspaces`): a
+ * workspace-pinned Sanctum token could exist here, but it is exactly the credential this
+ * route replaces, so authenticating with it would be circular.
  */
 final readonly class WorkspaceTokenController
 {
-    public function __construct(private IssueWorkspaceToken $issueWorkspaceToken) {}
+    public function __construct(
+        private IssueWorkspaceToken $issueWorkspaceToken,
+        private EnsurePlatformServiceMembership $ensurePlatformServiceMembership,
+    ) {}
 
     public function __invoke(string $slug): JsonResponse
     {
@@ -46,26 +55,28 @@ final readonly class WorkspaceTokenController
             return response()->json(['message' => 'Workspace not found.'], 404);
         }
 
-        $owner = User::query()->whereKey($workspace->user_id)->first();
-
-        // No owner, or a `workspaces.user_id` that does not resolve to a user who
-        // belongs: minting would produce exactly the orphaned credential this route
-        // exists to remove. Refuse and say what has to happen first.
-        if (! $owner instanceof User || ! $owner->belongsToWorkspace($workspace)) {
-            return response()->json([
-                'message' => 'This workspace has no owner who belongs to it; adopt it before reissuing its credential.',
-            ], 409);
+        try {
+            // Attaches the identity if this workspace predates the sweep, so the route
+            // guarantees the one precondition its token needs (a holder who belongs).
+            // Idempotent, and it never removes anybody.
+            $actor = $this->ensurePlatformServiceMembership->execute($workspace);
+        } catch (RuntimeException $exception) {
+            // Operator misconfiguration (no service user), not caller error — the same
+            // 500 and the same sentence the provisioning seam answers with.
+            return response()->json(['message' => $exception->getMessage()], 500);
         }
 
-        $issued = $this->issueWorkspaceToken->execute($owner, $workspace);
+        $issued = $this->issueWorkspaceToken->execute($actor, $workspace);
 
         return response()->json([
             'data' => [
                 'id' => $workspace->getKey(),
                 'slug' => $workspace->slug,
-                // The identity the credential now acts as. The orchestrator
-                // verifies the token against this before storing it.
-                'owner_email' => $owner->email,
+                // The identity the credential now acts as. The orchestrator verifies the
+                // token against this before storing it. It is the PLATFORM, not the
+                // workspace's owner — `owner_email` used to be reported here and named a
+                // different (human) identity than the one the token acted as.
+                'actor_email' => $actor->email,
                 'token' => $issued['token'],
                 'retired' => $issued['retired'],
             ],

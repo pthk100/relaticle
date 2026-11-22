@@ -29,10 +29,11 @@ final readonly class ProvisionWorkspace
         private CreateWorkspace $createWorkspace,
         private ResolveTenantOwner $resolveTenantOwner,
         private IssueWorkspaceToken $issueWorkspaceToken,
+        private EnsurePlatformServiceMembership $ensurePlatformServiceMembership,
     ) {}
 
     /**
-     * @return array{workspace: Workspace, owner: User, token: string}
+     * @return array{workspace: Workspace, owner: User, actor: User, token: string}
      */
     public function execute(
         string $name,
@@ -67,10 +68,19 @@ final readonly class ProvisionWorkspace
         // own "onboarding complete" marker.
         $workspace->forceFill(['onboarding_step' => null])->save();
 
+        // The credential this seam hands back acts as the PLATFORM, not as the tenant's
+        // owner (t_ca323f91). A projected row is written by the platform and must be
+        // attributed to it; minting for the owner — which is what this seam did — made
+        // every platform write render as that person's own edit. The workspace's OWNER
+        // is unchanged (it is what the session broker signs in as); only the identity the
+        // credential acts as moves.
+        $actor = $this->ensurePlatformServiceMembership->execute($workspace);
+
         return [
             'workspace' => $workspace,
             'owner' => $user,
-            'token' => $this->mintWorkspaceToken($user, $workspace, $tokenName),
+            'actor' => $actor,
+            'token' => $this->mintWorkspaceToken($actor, $workspace, $tokenName),
         ];
     }
 

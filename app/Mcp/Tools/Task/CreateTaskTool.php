@@ -59,7 +59,9 @@ final class CreateTaskTool extends BaseCreateTool
         /** @var Workspace $workspace */
         $workspace = $user->currentWorkspace;
         $workspaceId = $workspace->getKey();
-        $workspaceMemberIds = $workspace->allUsers()->pluck('id')->all();
+        // People only: the platform's own identity is a member so its credential can
+        // act here, but work assigned to the automation is work nobody does (t_ca323f91).
+        $workspaceMemberIds = User::query()->memberOf($workspace)->withoutPlatformServiceUser()->pluck('id')->all();
 
         return [
             'title' => ['required', 'string', 'max:255'],

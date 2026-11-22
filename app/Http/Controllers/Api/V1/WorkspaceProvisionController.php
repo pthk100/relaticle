@@ -58,8 +58,13 @@ final readonly class WorkspaceProvisionController
                 'name' => $result['workspace']->name,
                 'slug' => $result['workspace']->slug,
                 'token' => $result['token'],
+                // Two different identities, deliberately: the workspace is OWNED by the
+                // tenant, and its credential ACTS AS the platform (t_ca323f91). Reporting
+                // one where the caller expects the other is how a projected write ends up
+                // attributed to a human.
                 'owner_email' => $result['owner']->email,
                 'owner_user_id' => $result['owner']->getKey(),
+                'actor_email' => $result['actor']->email,
             ],
         ], 201);
     }

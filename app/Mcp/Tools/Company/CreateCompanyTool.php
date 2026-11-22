@@ -48,7 +48,10 @@ final class CreateCompanyTool extends BaseCreateTool
     {
         return [
             'name' => ['required', 'string', 'max:255'],
-            'account_owner_id' => ['sometimes', 'nullable', 'string', Rule::in($user->currentWorkspace->allUsers()->pluck('id')->all())],
+            'account_owner_id' => ['sometimes', 'nullable', 'string', Rule::in(
+                // A person, not the platform's own automation identity (t_ca323f91).
+                User::query()->memberOf($user->currentWorkspace)->withoutPlatformServiceUser()->pluck('id')->all(),
+            )],
         ];
     }
 }

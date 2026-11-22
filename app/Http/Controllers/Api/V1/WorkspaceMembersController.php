@@ -50,6 +50,9 @@ final readonly class WorkspaceMembersController
             ->orderBy('users.name')
             ->get()
             ->reject(fn (User $member): bool => $owner instanceof User && $member->is($owner))
+            // A member so the platform's credential can act here; not a member a caller
+            // may name as an assignee or an account owner (t_ca323f91).
+            ->reject(fn (User $member): bool => $member->isPlatformServiceUser())
             ->map(fn (User $member): array => $this->row($member, (string) $member->membership->role))
             ->values()
             ->all();

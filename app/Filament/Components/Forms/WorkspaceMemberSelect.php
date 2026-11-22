@@ -20,10 +20,15 @@ use Illuminate\Database\Eloquent\Builder;
  * WorkspaceMembersContext and deliberately does not use this component, because the pin
  * lives in the relationship() override and there is no relationship there.
  *
- * Restricts the option set to the current workspace, then pins the acting user to
- * the top of the list and falls back to alphabetical. Filament only applies its own
- * alphabetical order when the query carries none (Select.php:1151), so the injected
- * order wins without fighting it.
+ * Restricts the option set to the current workspace **and to people**, then pins the
+ * acting user to the top of the list and falls back to alphabetical. Filament only
+ * applies its own alphabetical order when the query carries none (Select.php:1151), so
+ * the injected order wins without fighting it.
+ *
+ * "And to people" is the platform identity's exclusion (t_ca323f91): it is a member of
+ * every workspace so its credential can act there, but a picker must never offer the
+ * automation as an assignee — and because this same query builds Filament's `in`
+ * validation rule, excluding it here is what makes a hand-crafted payload naming it fail.
  */
 final class WorkspaceMemberSelect extends Select
 {
@@ -70,7 +75,7 @@ final class WorkspaceMemberSelect extends Select
             return self::orderByCurrentUserFirst($query->whereIn('users.id', []));
         }
 
-        return self::orderByCurrentUserFirst($query->memberOf($workspace));
+        return self::orderByCurrentUserFirst($query->memberOf($workspace)->withoutPlatformServiceUser());
     }
 
     /**

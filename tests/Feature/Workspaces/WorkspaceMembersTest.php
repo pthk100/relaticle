@@ -507,3 +507,17 @@ test('leaving a workspace warns that your mailboxes disconnect when email is on'
         ? $modal->assertMountedActionModalSee($warning)
         : $modal->assertMountedActionModalDontSee($warning)->assertMountedActionModalSee(__('workspaces.modals.leave_workspace.notice'));
 })->with(['email on' => true, 'email off' => false]);
+
+test('the platform identity is not on the human roster', function (): void {
+    $serviceUser = User::factory()->create([
+        'email' => config('relaticle.platform.service_user_email'),
+        'name' => 'The platform',
+    ]);
+    $this->workspace->users()->attach($serviceUser, ['role' => 'member']);
+
+    // It IS a member (its credential needs to belong), but it is not a colleague: the
+    // roster is where people manage people, and this row has no role anybody can change.
+    livewire(WorkspaceMembers::class, ['workspace' => $this->workspace])
+        ->assertSee($this->owner->email)
+        ->assertDontSee('platform@relaticle.invalid');
+});

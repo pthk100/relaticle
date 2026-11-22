@@ -635,3 +635,22 @@ it('validates large arrays of relationship ids in a bounded number of queries', 
     expect($peopleLookupCount)->toBeLessThanOrEqual(3, 'people validation should not be N+1');
     expect($opportunityLookupCount)->toBeLessThanOrEqual(3, 'opportunity validation should not be N+1');
 });
+
+it('refuses the platform identity as a task assignee', function (): void {
+    Sanctum::actingAs($this->user);
+
+    // A member of the workspace, so the workspace-scope half of the rule accepts it:
+    // what must refuse it is the "is this a person" half.
+    $serviceUser = User::factory()->create([
+        'email' => config('relaticle.platform.service_user_email'),
+        'name' => 'The platform',
+    ]);
+    $this->workspace->users()->attach($serviceUser, ['role' => 'member']);
+
+    $this->postJson('/api/v1/tasks', [
+        'title' => 'Assigned to the automation',
+        'assignee_ids' => [$serviceUser->id],
+    ])
+        ->assertUnprocessable()
+        ->assertInvalid(['assignee_ids.0']);
+});

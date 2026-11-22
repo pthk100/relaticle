@@ -50,11 +50,18 @@ final class WhoAmiTool extends Tool
         /** @var Workspace $workspace */
         $workspace = $user->currentWorkspace;
 
-        $workspaceMembers = $workspace->allUsers()->map(fn (User $member): array => [
-            'id' => $member->id,
-            'name' => $member->name,
-            'email' => $member->email,
-        ])->values()->all();
+        // People only: the platform's own identity is a member of every workspace so its
+        // credential can act there, but this list is what a caller names an assignee from
+        // (t_ca323f91).
+        $workspaceMembers = User::query()
+            ->memberOf($workspace)
+            ->withoutPlatformServiceUser()
+            ->get()
+            ->map(fn (User $member): array => [
+                'id' => $member->id,
+                'name' => $member->name,
+                'email' => $member->email,
+            ])->values()->all();
 
         $result = [
             'user' => [

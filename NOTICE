@@ -778,6 +778,60 @@ first still gates workspace creation (part 4) and the presence of the exit contr
 (part 6).
 
 
+THE MODIFICATION (2026-11-22, part 15) - the platform's credential acts as the platform
+---------------------------------------------------------------------------------------
+Changed: a platform-minted workspace credential signs as the configured SERVICE
+identity, not as the workspace's owner; the service identity is attached to every
+workspace as a `member` so that credential can be used; and it is excluded from every
+picker a person names a member from.
+
+Reason: the credential is what the platform signs its own API writes with, and the CRM
+credits a row to the token's identity. Minting for the workspace's owner therefore made
+every row the platform wrote render as that person's own edit — their name in the list's
+Created By column, a person chip on the record page — while the platform's rows are not
+a colleague's work (measured on the live stack: a platform-API company, opportunity and
+task on one tenant all read `created_by = "B Boy Bat"`/the token's human and
+`isSystemCreated = false`). Minting for the service identity makes `creator_id` true, and
+the existing identity-based mark renders the row as `⊙ The platform` with no change to
+the renderer. Rendering `creation_source = api` as system instead was rejected: a
+tenant's own integration writes carry the same source.
+
+Files modified:
+  app/Actions/Platform/EnsurePlatformServiceMembership.php   (new)
+      attaches config('relaticle.platform.service_user_email') to a workspace as a
+      `member`, idempotently; executeIfAvailable() is the adoption-safe form.
+  app/Actions/Platform/ProvisionWorkspace.php
+      attaches the service identity, and mints the workspace credential for it. The
+      workspace's owner is unchanged (it is what the session broker signs in as).
+  app/Actions/Platform/EnsureWorkspaceOwner.php
+      attaches the service identity after an adoption moves ownership.
+  app/Console/Commands/EnsurePlatformServiceUserCommand.php
+      sweeps every existing workspace, reporting attached/already-present counts.
+  app/Http/Controllers/Api/V1/WorkspaceTokenController.php
+      mints for the configured service identity (never a caller-named account: no
+      `user_id`/`owner_email` body field is read) and reports `actor_email`.
+  app/Http/Controllers/Api/V1/WorkspaceProvisionController.php
+      reports `actor_email` beside `owner_email`.
+  app/Models/User.php
+      a `withoutPlatformServiceUser` scope, deliberately separate from `memberOf`,
+      which is an authorization scope the platform's own token must keep resolving.
+  app/Filament/Components/Forms/WorkspaceMemberSelect.php
+  app/Http/Controllers/Api/V1/WorkspaceMembersController.php
+  app/Livewire/App/Workspaces/WorkspaceMembers.php
+  app/Mcp/Tools/WhoAmiTool.php
+      the assignee/member pickers and the member roster no longer offer the automation.
+  app/Http/Requests/Api/V1/{Store,Update}TaskRequest.php
+  app/Http/Requests/Api/V1/{Store,Update}CompanyRequest.php
+  app/Mcp/Tools/Task/{Create,Update,AttachTaskToEntities}Tool.php
+  app/Mcp/Tools/Company/{Create,Update}CompanyTool.php
+      the same exclusion in the validation rules that accept a member id.
+
+No column, index or row changes, and no existing row's `creator_id` is rewritten: the
+rows already written keep the identity that wrote them (the only record of which
+credential produced them). The change is forward-only, plus a credential reissue for the
+tenants whose stored credential signs as a human.
+
+
 DEPLOYED BUILDS — the source commit behind each image tag
 ---------------------------------------------------------
 Every image tag this section maps is a build of THIS repository. The commit named

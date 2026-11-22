@@ -1206,3 +1206,20 @@ it('rejects an account owner outside the workspace', function (): void {
         ->assertUnprocessable()
         ->assertInvalid('account_owner_id');
 });
+
+it('refuses the platform identity as a company account owner', function (): void {
+    Sanctum::actingAs($this->user);
+
+    $serviceUser = User::factory()->create([
+        'email' => config('relaticle.platform.service_user_email'),
+        'name' => 'The platform',
+    ]);
+    $this->workspace->users()->attach($serviceUser, ['role' => 'member']);
+
+    $this->postJson('/api/v1/companies', [
+        'name' => 'Owned by the automation',
+        'account_owner_id' => $serviceUser->id,
+    ])
+        ->assertUnprocessable()
+        ->assertInvalid(['account_owner_id']);
+});
