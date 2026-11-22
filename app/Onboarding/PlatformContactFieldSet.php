@@ -40,8 +40,23 @@ final readonly class PlatformContactFieldSet
     {
         return array_map(
             static fn (PeopleField $field): string => $field->value,
-            PeopleField::cases(),
+            self::seededCases(),
         );
+    }
+
+    /**
+     * The contact codes every workspace starts with. The KOC mirrors are the
+     * operations workspace's own and are seeded by McnCollaborationFieldsSeeder,
+     * so a brand tenant never receives them here.
+     *
+     * @return list<PeopleField>
+     */
+    private static function seededCases(): array
+    {
+        return array_values(array_filter(
+            PeopleField::cases(),
+            static fn (PeopleField $field): bool => ! $field->belongsToOperationsWorkspace(),
+        ));
     }
 
     /**
@@ -63,7 +78,7 @@ final readonly class PlatformContactFieldSet
         $fields = [];
         $options = [];
 
-        foreach (PeopleField::cases() as $case) {
+        foreach (self::seededCases() as $case) {
             if ($existing->has($case->value)) {
                 continue;
             }

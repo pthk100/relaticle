@@ -137,6 +137,18 @@ trait CustomFieldTrait
     }
 
     /**
+     * Whether this code belongs to the operations workspace alone.
+     *
+     * Default false: the codes every workspace starts with are the brand set.
+     * The KOC collaboration mirrors override this, so the workspace-created
+     * listener and the contact field set skip them.
+     */
+    public function belongsToOperationsWorkspace(): bool
+    {
+        return false;
+    }
+
+    /**
      * Get the position this field takes in the entity's form, view and list.
      *
      * Null keeps the historical behaviour for the enums that do not declare an

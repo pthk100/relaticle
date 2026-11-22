@@ -33,7 +33,7 @@ test('a new workspace starts with every contact field, once each', function () {
 
     expect(collect($codes)->sort()->values()->all())
         ->toBe(collect(PlatformContactFieldSet::codes())->sort()->values()->all())
-        ->and($codes)->toHaveCount(count(PeopleField::cases()));
+        ->and($codes)->toHaveCount(count(PlatformContactFieldSet::codes()));
 });
 
 test('re-applying the set to a workspace that has it creates nothing', function () {
@@ -63,11 +63,11 @@ test('re-applying the set to a workspace that predates it inserts only what is m
         ->update(['settings' => json_encode(['unique_per_entity_type' => false])]);
 
     expect(PlatformContactFieldSet::applyTo($workspace->getKey()))
-        ->toBe(count(PeopleField::cases()) - count($legacy));
+        ->toBe(count(PlatformContactFieldSet::codes()) - count($legacy));
 
     $fields = contactFields($workspace->getKey());
 
-    expect($fields)->toHaveCount(count(PeopleField::cases()))
+    expect($fields)->toHaveCount(count(PlatformContactFieldSet::codes()))
         ->and($fields['phone_number']->settings->unique_per_entity_type)->toBeTrue()
         ->and(PlatformContactFieldSet::applyTo($workspace->getKey()))->toBe(0);
 });
@@ -125,7 +125,12 @@ test('the contact set adds only the scanned fields to the list columns', functio
 test('the field set carries the display order it declares', function () {
     $workspace = Workspace::factory()->create();
 
-    foreach (PeopleField::cases() as $case) {
+    $seeded = array_filter(
+        PeopleField::cases(),
+        fn (PeopleField $case): bool => ! $case->belongsToOperationsWorkspace(),
+    );
+
+    foreach ($seeded as $case) {
         expect(contactFields($workspace->getKey())[$case->value]->sort_order)
             ->toBe($case->getSortOrder());
     }
@@ -149,7 +154,23 @@ test('the withdrawal reason select offers the controlled vocabulary, not source 
         ->and($options)->toContain('other');
 });
 
-test('a workspace seeded before the vocabulary grew is topped up, not duplicated', function () {
+test('the contact set leaves the KOC mirrors to the operations workspace', function (): void {
+    $workspace = Workspace::factory()->create();
+
+    PlatformContactFieldSet::applyTo($workspace->getKey());
+
+    $kocMirrors = [
+        PeopleField::TIKTOK_HANDLE->value,
+        PeopleField::POSTAL_ADDRESS->value,
+        PeopleField::BLACKLIST_KIND->value,
+        PeopleField::BLACKLIST_REASON->value,
+    ];
+
+    expect(array_values(array_intersect(PlatformContactFieldSet::codes(), $kocMirrors)))->toBe([])
+        ->and(contactFields($workspace->getKey()))->not->toHaveKeys($kocMirrors);
+});
+
+test('a workspace seeded before the vocabulary grew is topped up, not duplicated', function (): void {
     $workspace = Workspace::factory()->create();
 
     // Rewind optout_reason to the six codes the first pass seeded.

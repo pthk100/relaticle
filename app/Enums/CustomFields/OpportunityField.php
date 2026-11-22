@@ -160,4 +160,23 @@ enum OpportunityField: string
             default => null,
         };
     }
+
+    /**
+     * The KOC mirrors describe a collaboration we run, not a sales deal a brand
+     * tenant owns, so they belong to the operations workspace alone.
+     */
+    public function belongsToOperationsWorkspace(): bool
+    {
+        return match ($this) {
+            self::KOC_STAGE,
+            self::PRODUCT_SKU,
+            self::OPERATOR,
+            self::SAMPLE_TRACKING,
+            self::AFFILIATE_LINK,
+            self::LIVE_POST_URL => true,
+            self::AMOUNT,
+            self::CLOSE_DATE,
+            self::STAGE => false,
+        };
+    }
 }

@@ -465,4 +465,44 @@ enum PeopleField: string
             default => null,
         };
     }
+
+    /**
+     * The KOC mirrors describe a collaboration we run, not a contact a brand
+     * tenant owns, so they belong to the operations workspace alone.
+     */
+    public function belongsToOperationsWorkspace(): bool
+    {
+        return match ($this) {
+            self::TIKTOK_HANDLE,
+            self::POSTAL_ADDRESS,
+            self::BLACKLIST_KIND,
+            self::BLACKLIST_REASON => true,
+            self::EMAILS,
+            self::PHONE_NUMBER,
+            self::WHATSAPP_NUMBER,
+            self::LINE_ID,
+            self::WECHAT_ID,
+            self::KAKAOTALK_ID,
+            self::PREFERRED_CHANNEL,
+            self::JOB_TITLE,
+            self::LINKEDIN,
+            self::DEPARTMENT,
+            self::SENIORITY,
+            self::COUNTRY,
+            self::PREFERRED_LANGUAGE,
+            self::TIMEZONE,
+            self::LEAD_SOURCE,
+            self::PRODUCTS_INTEREST,
+            self::SEGMENTS,
+            self::NEXT_FOLLOW_UP,
+            self::ACCOUNT_OWNER,
+            self::BIRTHDAY,
+            self::LIFECYCLE_STAGE,
+            self::MARKETING_OPTIN,
+            self::DNC,
+            self::OPTOUT_REASON,
+            self::JURISDICTION,
+            self::LAWFUL_BASIS => false,
+        };
+    }
 }

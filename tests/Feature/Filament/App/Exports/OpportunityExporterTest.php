@@ -75,7 +75,8 @@ test('export columns include system-seeded custom fields', function () {
     $columnLabels = collect($columns)->map(fn ($column) => $column->getLabel())->all();
 
     foreach (OpportunityField::cases() as $field) {
-        expect($columnLabels)->toContain($field->getDisplayName());
+        expect(in_array($field->getDisplayName(), $columnLabels, true))
+            ->toBe(! $field->belongsToOperationsWorkspace());
     }
 });
 

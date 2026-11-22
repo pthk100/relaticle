@@ -54,6 +54,24 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Operations workspaces  (fork addition, see NOTICE)
+    |--------------------------------------------------------------------------
+    |
+    | The workspaces the KOC collaboration fields belong to, parsed from the
+    | platform's own `MCN_OPERATIONS_WORKSPACES` map (`TH:<workspace id>,
+    | MY:<workspace id>`). The orchestrator reads the same variable to resolve
+    | a market's workspace, so the two never carry separate lists.
+    |
+    | McnCollaborationFieldsSeeder seeds these ids and prunes every other
+    | workspace. Empty refuses to guess rather than defaulting to all tenants.
+    */
+    'operations_workspaces' => array_values(array_filter(array_map(
+        static fn (string $pair): string => trim(explode(':', $pair, 2)[1] ?? ''),
+        explode(',', (string) env('MCN_OPERATIONS_WORKSPACES', '')),
+    ))),
+
+    /*
+    |--------------------------------------------------------------------------
     | Workspaces
     |--------------------------------------------------------------------------
     |

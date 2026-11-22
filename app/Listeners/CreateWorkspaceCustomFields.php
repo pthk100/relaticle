@@ -59,6 +59,10 @@ final readonly class CreateWorkspaceCustomFields
             $entityTypes[] = $entityType;
 
             foreach ($enumClass::cases() as $enum) {
+                if ($enum->belongsToOperationsWorkspace()) {
+                    continue;
+                }
+
                 $rows = CustomFieldRow::build((string) $workspace->getKey(), $entityType, $enum, $now);
                 $fields[] = $rows['field'];
 

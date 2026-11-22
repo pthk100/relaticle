@@ -40,6 +40,20 @@ beforeEach(function (): void {
     Feature::define(OnboardSeed::class, true);
 });
 
+/**
+ * The codes a brand-facing workspace starts with: every enum case except the
+ * KOC collaboration mirrors, which belong to the operations workspace.
+ *
+ * @param  list<CompanyField|OpportunityField|PeopleField|TaskField|NoteField>  $cases
+ */
+function brandDefaultFieldCount(array $cases): int
+{
+    return count(array_filter(
+        $cases,
+        static fn (CompanyField|OpportunityField|PeopleField|TaskField|NoteField $case): bool => ! $case->belongsToOperationsWorkspace(),
+    ));
+}
+
 it('seeds sales demo data for sales use case', function (): void {
     $user = User::factory()->create();
 
@@ -142,11 +156,11 @@ it('creates all custom fields for the first workspace', function (): void {
         ->get()
         ->groupBy('entity_type');
 
-    expect($fields->get('company'))->toHaveCount(count(CompanyField::cases()))
-        ->and($fields->get('people'))->toHaveCount(count(PeopleField::cases()))
-        ->and($fields->get('opportunity'))->toHaveCount(count(OpportunityField::cases()))
-        ->and($fields->get('task'))->toHaveCount(count(TaskField::cases()))
-        ->and($fields->get('note'))->toHaveCount(count(NoteField::cases()));
+    expect($fields->get('company'))->toHaveCount(brandDefaultFieldCount(CompanyField::cases()))
+        ->and($fields->get('people'))->toHaveCount(brandDefaultFieldCount(PeopleField::cases()))
+        ->and($fields->get('opportunity'))->toHaveCount(brandDefaultFieldCount(OpportunityField::cases()))
+        ->and($fields->get('task'))->toHaveCount(brandDefaultFieldCount(TaskField::cases()))
+        ->and($fields->get('note'))->toHaveCount(brandDefaultFieldCount(NoteField::cases()));
 });
 
 it('seeds people linked to their correct companies for sales', function (): void {
@@ -399,11 +413,11 @@ it('seeds the default fields and their options in two queries', function (): voi
 it('writes nothing to the activity log when it seeds the default fields', function (): void {
     $workspace = Workspace::factory()->create(['personal_workspace' => false]);
 
-    $seeded = count(CompanyField::cases())
-        + count(PeopleField::cases())
-        + count(OpportunityField::cases())
-        + count(TaskField::cases())
-        + count(NoteField::cases());
+    $seeded = brandDefaultFieldCount(CompanyField::cases())
+        + brandDefaultFieldCount(PeopleField::cases())
+        + brandDefaultFieldCount(OpportunityField::cases())
+        + brandDefaultFieldCount(TaskField::cases())
+        + brandDefaultFieldCount(NoteField::cases());
 
     expect(CustomField::withoutGlobalScopes()->where('tenant_id', $workspace->id)->count())->toBe($seeded)
         ->and(Activity::query()->whereIn('subject_type', [
