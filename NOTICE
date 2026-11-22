@@ -900,6 +900,15 @@ the host, `3.6.3-logout-console-exit` and earlier, correspond to parts 1-6.)
       (the build excludes it), so the two test files carry no comparison. The image's
       own copy of this NOTICE is the build-time text: it carries part 14 and not this
       row.
+  :3.6.3-platform-credential              14aa43a88  (`platform`)             21 of 21, all identical
+      part 15. The build context was a `git archive` of 14aa43a88, built on DEV050.
+      Every file that commit touches and the image carries -- 20 PHP files plus
+      NOTICE -- was sha256-compared inside the running container against the commit:
+      21 of 21 identical, 0 differ, read back with
+        while read h f; do sha256sum "$f" ... done < hashes.txt
+      The seven test files that commit also touches are not in the image (the build
+      excludes `tests/`), so they carry no comparison. The image's own copy of this
+      NOTICE is the build-time text: it carries part 15 and not this row.
 
 Going from a running container to its source, without asking anyone:
 
